@@ -6,12 +6,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use gb_io::reader::SeqReader;
-use gb_io::seq::Seq;
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
-use pyo3::PyIterProtocol;
-use pyo3::PyObjectProtocol;
+
 
 use super::pyfile::PyFileGILRead;
 use super::Record;
@@ -69,7 +67,7 @@ impl RecordReader {
         let p = path.as_ref();
         match Handle::try_from(p.to_owned()) {
             Ok(handle) => Self::new(SeqReader::new(handle)),
-            Err(e) => unimplemented!("error management"),
+            Err(_e) => unimplemented!("error management"),
         }
     }
 
@@ -91,13 +89,13 @@ impl RecordReader {
 //     }
 // }
 
-#[pyproto]
-impl PyIterProtocol for RecordReader {
-    fn __iter__(slf: PyRefMut<'p, Self>) -> PyResult<PyRefMut<'p, Self>> {
+#[pymethods]
+impl RecordReader {
+    fn __iter__<'p>(slf: PyRefMut<'p, Self>) -> PyResult<PyRefMut<'p, Self>> {
         Ok(slf)
     }
 
-    fn __next__(mut slf: PyRefMut<'p, Self>) -> PyResult<Option<Record>> {
+    fn __next__<'p>(mut slf: PyRefMut<'p, Self>) -> PyResult<Option<Record>> {
         match slf.deref_mut().reader.next() {
             None => Ok(None),
             Some(Ok(seq)) => Ok(Some(Record::from(seq))),
@@ -109,7 +107,7 @@ impl PyIterProtocol for RecordReader {
                 } else {
                     // FIXME: error management
                     let msg = format!("parser failed: {}", e);
-                    return Err(PyRuntimeError::new_err(msg));
+                    Err(PyRuntimeError::new_err(msg))
                 }
             }
         }

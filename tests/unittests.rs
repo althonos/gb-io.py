@@ -31,7 +31,7 @@ macro_rules! unittest {
                 gb_io_py::init(py, &module).unwrap();
                 py.import("sys")
                     .unwrap()
-                    .get("modules")
+                    .getattr("modules")
                     .unwrap()
                     .downcast::<PyDict>()
                     .unwrap()
@@ -41,7 +41,7 @@ macro_rules! unittest {
                 // patch `sys.path` to locate tests from the project folder
                 py.import("sys")
                     .unwrap()
-                    .get("path")
+                    .getattr("path")
                     .unwrap()
                     .downcast::<PyList>()
                     .unwrap()
@@ -55,7 +55,7 @@ macro_rules! unittest {
                 let prog = py
                     .import("unittest")
                     .unwrap()
-                    .call(
+                    .call_method(
                         "main",
                         (concat!("tests.", stringify!($name)),),
                         Some(kwargs),

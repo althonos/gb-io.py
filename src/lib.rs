@@ -7,7 +7,7 @@ mod iter;
 mod pyfile;
 
 use std::io::Read;
-use std::pin::Pin;
+
 
 use gb_io::reader::SeqReader;
 use gb_io::seq::Seq;
@@ -36,7 +36,7 @@ impl Record {
     /// `str`, optional: The name of the record, or `None`.
     #[getter]
     fn get_name(&self) -> PyResult<Option<&str>> {
-        Ok(self.seq.name.as_ref().map(String::as_str))
+        Ok(self.seq.name.as_deref())
     }
 
     #[setter]
@@ -75,7 +75,7 @@ impl Record {
     /// `str`, optional: The definition of the record, or `None`.
     #[getter]
     fn get_definition(&self) -> PyResult<Option<&str>> {
-        Ok(self.seq.definition.as_ref().map(String::as_str))
+        Ok(self.seq.definition.as_deref())
     }
 
     #[setter]
@@ -87,7 +87,7 @@ impl Record {
     /// `str`, optional: The accession of the record, or `None`.
     #[getter]
     fn get_accession(&self) -> PyResult<Option<&str>> {
-        Ok(self.seq.accession.as_ref().map(String::as_str))
+        Ok(self.seq.accession.as_deref())
     }
 
     #[setter]
@@ -99,7 +99,7 @@ impl Record {
     /// `str`, optional: The version of the record, or `None`.
     #[getter]
     fn get_version(&self) -> PyResult<Option<&str>> {
-        Ok(self.seq.version.as_ref().map(String::as_str))
+        Ok(self.seq.version.as_deref())
     }
 
     #[setter]
@@ -121,7 +121,7 @@ impl Record {
 
 impl From<Seq> for Record {
     fn from(seq: Seq) -> Self {
-        Self { seq: seq }
+        Self { seq }
     }
 }
 
@@ -152,15 +152,15 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     #[pyo3(name = "load", text_signature = "(fh)")]
     fn load(py: Python, fh: &PyAny) -> PyResult<Py<PyList>> {
         // extract either a path or a file-handle from the arguments
-        let path: Option<String>;
+        // let path: Option<String>;
         let stream: Box<dyn Read> = if let Ok(s) = fh.cast_as::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::open(s.to_str()?) {
                 Ok(f) => f,
-                Err(e) => unimplemented!("error management"),
+                Err(_e) => unimplemented!("error management"),
             };
             // store the path for later
-            path = Some(s.to_str()?.to_string());
+            // path = Some(s.to_str()?.to_string());
             // send the file reader to the heap.
             Box::new(bf)
         } else {
@@ -171,27 +171,27 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                 Ok(f) => f,
                 // Object is not a binary file-handle: wrap the inner error
                 // into a `TypeError` and raise that error.
-                Err(e) => {
+                Err(_e) => {
                     unimplemented!("error management")
                     // raise!(py, PyTypeError("expected path or binary file handle") from e)
                 }
             };
             // extract the path from the `name` attribute
-            path = fh
-                .getattr("name")
-                .and_then(|n| n.downcast::<PyString>().map_err(PyErr::from))
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_string())
-                .ok();
-            // use a sequential or a threaded reader depending on `threads`.
+            // path = fh
+            //     .getattr("name")
+            //     .and_then(|n| n.downcast::<PyString>().map_err(PyErr::from))
+            //     .and_then(|s| s.to_str())
+            //     .map(|s| s.to_string())
+            //     .ok();
+            // send the Python file-handle reference to the heap.
             Box::new(bf)
         };
 
         // create the reader
-        let mut reader = SeqReader::new(stream);
+        let reader = SeqReader::new(stream);
 
         // parse all records
-        let mut records = PyList::empty(py);
+        let records = PyList::empty(py);
         for result in reader {
             match result {
                 Ok(seq) => {
