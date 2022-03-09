@@ -95,7 +95,7 @@ impl<'p> Read for PyFileReadBin<'p> {
                 PyAny::from_owned_ptr(
                     self.file.py(),
                     pyo3::ffi::PyMemoryView_FromMemory(
-                        buf.as_mut_ptr() as *mut i8,
+                        buf.as_mut_ptr() as *mut libc::c_char,
                         buf.len() as isize,
                         pyo3::ffi::PyBUF_WRITE,
                     ),

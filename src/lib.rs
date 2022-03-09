@@ -1,4 +1,5 @@
 extern crate gb_io;
+extern crate libc;
 extern crate pyo3;
 extern crate pyo3_built;
 
