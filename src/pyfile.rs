@@ -1,8 +1,5 @@
-
 use std::io::Error as IoError;
 use std::io::Read;
-
-
 
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;

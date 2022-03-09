@@ -9,7 +9,6 @@ mod pyfile;
 
 use std::io::Read;
 
-
 use gb_io::reader::SeqReader;
 use gb_io::seq::Seq;
 use gb_io::seq::Topology;

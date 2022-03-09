@@ -10,7 +10,6 @@ use gb_io::reader::SeqReader;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-
 use super::pyfile::PyFileGILRead;
 use super::Record;
 
