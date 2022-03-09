@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use gb_io::reader::SeqReader;
 use gb_io::seq::Seq;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use pyo3::PyIterProtocol;
@@ -106,8 +107,9 @@ impl PyIterProtocol for RecordReader {
                 if PyErr::occurred(py) {
                     Err(PyErr::fetch(py))
                 } else {
-                    // Err(Error::from(e).into())
-                    unimplemented!("error management")
+                    // FIXME: error management
+                    let msg = format!("parser failed: {}", e);
+                    return Err(PyRuntimeError::new_err(msg));
                 }
             }
         }

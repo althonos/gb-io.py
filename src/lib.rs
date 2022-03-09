@@ -12,8 +12,10 @@ use std::pin::Pin;
 use gb_io::reader::SeqReader;
 use gb_io::seq::Seq;
 use gb_io::seq::Topology;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3_built::pyo3_built;
@@ -70,9 +72,51 @@ impl Record {
         }
     }
 
-    // TODO: date, len, molecule_type, division, definition
-    //       accession, version, source, dblink, keywords,
+    /// `str`, optional: The definition of the record, or `None`.
+    #[getter]
+    fn get_definition(&self) -> PyResult<Option<&str>> {
+        Ok(self.seq.definition.as_ref().map(String::as_str))
+    }
+
+    #[setter]
+    fn set_definition(&mut self, definition: Option<String>) -> PyResult<()> {
+        self.seq.definition = definition;
+        Ok(())
+    }
+
+    /// `str`, optional: The accession of the record, or `None`.
+    #[getter]
+    fn get_accession(&self) -> PyResult<Option<&str>> {
+        Ok(self.seq.accession.as_ref().map(String::as_str))
+    }
+
+    #[setter]
+    fn set_accession(&mut self, accession: Option<String>) -> PyResult<()> {
+        self.seq.accession = accession;
+        Ok(())
+    }
+
+    /// `str`, optional: The version of the record, or `None`.
+    #[getter]
+    fn get_version(&self) -> PyResult<Option<&str>> {
+        Ok(self.seq.version.as_ref().map(String::as_str))
+    }
+
+    #[setter]
+    fn set_version(&mut self, version: Option<String>) -> PyResult<()> {
+        self.seq.version = version;
+        Ok(())
+    }
+
+    // TODO: date, len, molecule_type, division,
+    //       source, dblink, keywords,
     //       references, comments, contig, sequence, features
+
+    #[getter]
+    fn get_sequence(&self) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        Ok(PyBytes::new(gil.python(), &self.seq.seq).into())
+    }
 }
 
 impl From<Seq> for Record {
@@ -154,7 +198,9 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                     records.append(Py::new(py, Record::from(seq))?)?;
                 }
                 Err(error) => {
-                    unimplemented!("error management")
+                    // FIXME: error management
+                    let msg = format!("parser failed: {}", error);
+                    return Err(PyRuntimeError::new_err(msg));
                 }
             }
         }
