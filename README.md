@@ -81,6 +81,34 @@ for record in gb_io.iter("tests/data/AY048670.1.gb"):
     print(record.name, record.sequence[:10])
 ```
 
+## 📝 Example
+
+The following small script will extract all the CDS features from a GenBank
+file, and write them in FASTA format to an output file:
+```python
+import gb_io
+
+with open("tests/data/AY048670.1.faa", "w") as dst:
+    for record in gb_io.iter("tests/data/AY048670.1.gb"):
+        for feature in filter(lambda feat: feat.type == "CDS", record.features):
+            qualifiers = feature.qualifiers.to_dict()
+            print(qualifiers)
+            dst.write(">{}\n".format(qualifiers["locus_tag"][0]))
+            dst.write("{}\n".format(qualifiers["translation"][0]))
+```
+
+Compared to similar implementations using `Bio.SeqIO.parse`, `Bio.GenBank.parse`
+and `Bio.GenBank.Scanner.GenBankScanner.parse_cds_features`, the performance is
+the following:
+
+|               | `gb_io.iter`  | `GenBankScanner` | `GenBank.parse` | `SeqIO.parse` |
+| ------------- | ------------- | ---------------- | --------------- | ------------- |
+| Time (s)      | **2.264**     | 7.982            | 15.259          | 19.351        |
+| Speed (MiB/s) | **136.5**     | 37.1             | 20.5            | 16.2          |
+| Speedup       | **x8.55**     | x2.42            | x1.27           | -             |
+
+
+
 ## 💭 Feedback
 
 ### ⚠️ Issue Tracker
