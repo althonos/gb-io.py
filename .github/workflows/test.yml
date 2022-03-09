@@ -47,7 +47,7 @@ jobs:
       with:
         rust-version: stable
     - name: Update CI requirements
-      run: python -m pip install -U -r ci/requirements.txt
+      run: python -m pip install -U -r .github/workflows/requirements.txt
     - name: Build Rust extension
       run: python setup.py build_ext --inplace --debug
     - name: Test Rust extension
@@ -77,7 +77,7 @@ jobs:
         options: --rm -v ${{ github.workspace }}:/io:rw --workdir=/io
         shell: bash
         run: |
-          ${{ env.pyo3-python }} -m pip install -U -r ci/requirements.txt
+          ${{ env.pyo3-python }} -m pip install -U -r .github/workflows/requirements.txt
           ${{ env.pyo3-python }} setup.py build_ext --inplace --debug
           if [ ${{ matrix.python-version }} != 'cp36-cp36m' ]; then
               ${{ env.pyo3-python }} -m unittest discover -vv
@@ -121,7 +121,7 @@ jobs:
       with:
         rust-version: stable
     - name: Update CI requirements
-      run: python -m pip install -U -r ci/requirements.txt
+      run: python -m pip install -U -r .github/workflows/requirements.txt
     - name: Build Rust extension
       run: python setup.py build_ext --inplace --debug
     - name: Test Rust extension
