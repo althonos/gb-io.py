@@ -91,14 +91,12 @@ class build_rust(_build_rust):
         self.mkpath(os.environ["CARGO_HOME"])
         self.mkpath(os.environ["RUSTUP_HOME"])
 
-        self.announce("downloading rustup.sh install script", level=INFO)
+        self.announce("downloading rustup.sh install script")
         with urllib.request.urlopen("https://sh.rustup.rs") as res:
             with open(rustup_sh, "wb") as dst:
                 shutil.copyfileobj(res, dst)
 
-        self.announce(
-            "installing Rust compiler to {}".format(self.build_temp), level=INFO
-        )
+        self.announce("installing Rust compiler to {}".format(self.build_temp))
         proc = subprocess.run(
             [
                 "sh",
@@ -113,7 +111,7 @@ class build_rust(_build_rust):
         )
         proc.check_returncode()
 
-        self.announce("updating $PATH variable to use local Rust compiler", level=INFO)
+        self.announce("updating $PATH variable to use local Rust compiler")
         os.environ["PATH"] = ":".join(
             [
                 os.path.abspath(os.path.join(os.environ["CARGO_HOME"], "bin")),
