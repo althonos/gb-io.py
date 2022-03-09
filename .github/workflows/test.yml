@@ -7,16 +7,13 @@ on:
 jobs:
 
   test_linux:
-    name: Test (Linux)
+    name: Test (Linux, x86-64)
     runs-on: ubuntu-latest
     env:
       OS: Linux
     strategy:
       matrix:
         include:
-        - python-version: 3.6
-          python-release: v3.6
-          python-impl: CPython
         - python-version: 3.7
           python-release: v3.7
           python-impl: CPython
@@ -29,9 +26,6 @@ jobs:
         - python-version: "3.10"
           python-release: v3.10
           python-impl: CPython
-        - python-version: pypy-3.6
-          python-release: v3.6
-          python-impl: PyPy
         - python-version: pypy-3.7
           python-release: v3.7
           python-impl: PyPy
@@ -55,10 +49,10 @@ jobs:
       if: ${{ matrix.python-release != 'v3.6' }}
 
   test_linux_aarch64:
-    name: "Test (Linux, Aarch64)"
+    name: Test (Linux, Aarch64)
     strategy:
       matrix:
-        python-version: [cp36-cp36m, cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310]
+        python-version: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310]
       fail-fast: false
     runs-on: ubuntu-latest
     env:
@@ -84,16 +78,13 @@ jobs:
           fi
 
   test_osx:
-    name: Test (OSX)
+    name: Test (OSX, x86-64)
     runs-on: macos-latest
     env:
       OS: OSX
     strategy:
       matrix:
         include:
-        - python-version: 3.6
-          python-release: v3.6
-          python-impl: CPython
         - python-version: 3.7
           python-release: v3.7
           python-impl: CPython
@@ -129,14 +120,33 @@ jobs:
       if: ${{ matrix.python-release != 'v3.6' }}
 
   coverage:
+    name: Coverage
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        - python-version: 3.7
+          python-release: v3.7
+          python-impl: CPython
+        - python-version: 3.8
+          python-release: v3.8
+          python-impl: CPython
+        - python-version: 3.9
+          python-release: v3.9
+          python-impl: CPython
+        - python-version: "3.10"
+          python-release: "v3.10"
+          python-impl: CPython
+        - python-version: pypy-3.7
+          python-release: v3.7
+          python-impl: PyPy
     steps:
     - name: Checkout code
       uses: actions/checkout@v1
-    - name: Set up Python 3.9
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
-        python-version: "3.10"
+        python-version: ${{ matrix.python-version }}
     - name: Setup Rust nightly
       uses: actions-rs/toolchain@v1
       with:
@@ -149,4 +159,6 @@ jobs:
         version: '0.16.0'
         args: '-v --out Xml --ciserver github-actions'
     - name: Upload coverage statistics
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v2
+      with:
+        flags: ${{ matrix.python-release }},${{ matrix.python-impl }}
