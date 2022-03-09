@@ -21,6 +21,8 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::types::PyDate;
+use pyo3::types::PyDateAccess;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
@@ -137,9 +139,85 @@ impl Record {
         Ok(())
     }
 
-    // TODO: date, len, molecule_type, division,
-    //       source, dblink, keywords,
-    //       references, comments, contig, sequence, features
+    /// `str`, optional: The molecule type of the record, or `None`.
+    #[getter]
+    fn get_molecule_type(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+        let seq = slf.seq.read().expect("cannot read lock");
+        match &seq.molecule_type {
+            None => Ok(slf.py().None()),
+            Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
+        }
+    }
+
+    #[setter]
+    fn set_molecule_type(slf: PyRefMut<'_, Self>, molecule_type: Option<String>) -> PyResult<()> {
+        let mut seq = slf.seq.write().expect("cannot write lock");
+        seq.molecule_type = molecule_type;
+        Ok(())
+    }
+
+    /// `str`: The division this record is stored under in GenBank.
+    #[getter]
+    fn get_division(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+        let seq = slf.seq.read().expect("cannot read lock");
+        Ok(PyString::new(slf.py(), &seq.division).into_py(slf.py()))
+    }
+
+    #[setter]
+    fn set_division(slf: PyRefMut<'_, Self>, division: String) -> PyResult<()> {
+        let mut seq = slf.seq.write().expect("cannot write lock");
+        seq.division = division;
+        Ok(())
+    }
+
+    /// `str`, optional: Keywords related to the record, or `None`.
+    #[getter]
+    fn get_keywords(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+        let seq = slf.seq.read().expect("cannot read lock");
+        match &seq.keywords {
+            None => Ok(slf.py().None()),
+            Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
+        }
+    }
+
+    #[setter]
+    fn set_keywords(slf: PyRefMut<'_, Self>, keywords: Option<String>) -> PyResult<()> {
+        let mut seq = slf.seq.write().expect("cannot write lock");
+        seq.keywords = keywords;
+        Ok(())
+    }
+
+    /// `~datetime.date`, optional: The date this record was submitted, or `None`.
+    #[getter]
+    fn get_date(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let seq = slf.seq.read().expect("cannot read lock");
+        match &seq.date {
+            None => Ok(py.None()),
+            Some(dt) => {
+                let date = PyDate::new(py, dt.year(), dt.month() as u8, dt.day() as u8)?;
+                Ok(date.into_py(py))
+            }
+        }
+    }
+
+    #[setter]
+    fn set_date(slf: PyRefMut<'_, Self>, date: Option<&PyDate>) -> PyResult<()> {
+        let mut seq = slf.seq.write().expect("cannot write lock");
+        if let Some(dt) = date {
+            let year = dt.get_year();
+            let month = dt.get_month() as u32;
+            let day = dt.get_day() as u32;
+            if let Ok(date) = gb_io::seq::Date::from_ymd(year, month, day) {
+                seq.date = Some(date);
+            } else {
+                return Err(PyValueError::new_err("invalid date"));
+            }
+        } else {
+            seq.date = None;
+        }
+        Ok(())
+    }
 
     #[getter]
     fn get_sequence(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
@@ -156,6 +234,8 @@ impl Record {
             },
         )
     }
+
+    // TODO: len, source, dblink, references, comments, contig,
 }
 
 impl From<Seq> for Record {
