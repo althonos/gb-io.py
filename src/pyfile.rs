@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::io::Error as IoError;
 use std::io::Read;
 use std::io::Write;
@@ -40,7 +41,7 @@ macro_rules! transmute_file_error {
 #[derive(Debug, Clone)]
 pub enum PyFileRead<'p> {
     Binary(PyFileReadBin<'p>),
-    Text(PyFileReadText<'p>)
+    Text(PyFileReadText<'p>),
 }
 
 impl<'p> PyFileRead<'p> {
@@ -53,7 +54,7 @@ impl<'p> PyFileRead<'p> {
         } else {
             let ty = res.get_type().name()?.to_string();
             Err(PyTypeError::new_err(format!(
-                "expected bytes, found {}",
+                "expected bytes or str, found {}",
                 ty
             )))
         }
@@ -95,8 +96,8 @@ impl<'p> Read for PyFileReadBin<'p> {
                     pyo3::ffi::PyMemoryView_FromMemory(
                         buf.as_mut_ptr() as *mut i8,
                         buf.len() as isize,
-                        pyo3::ffi::PyBUF_WRITE
-                    )
+                        pyo3::ffi::PyBUF_WRITE,
+                    ),
                 )
             };
             // read directly into the `memoryview`
@@ -205,50 +206,107 @@ impl<'p> Read for PyFileReadText<'p> {
 
 // ---------------------------------------------------------------------------
 
-// /// A wrapper around a readable Python file borrowed within a GIL lifetime.
-// #[derive(Debug, Clone)]
-// pub struct PyFileRead<'p> {
-//     file: &'p PyAny,
-//     mode: FileMode,
-//     buffer: Vec<u8>, // used only in Text mode
-// }
-//
-//
-//
-// impl<'p> Read for PyFileRead<'p> {
-//     fn read(&mut self, mut buf: &mut [u8]) -> Result<usize, IoError> {
-//         match self.mode {
-//             // In binary mode, just read at most `buf.len()` bytes.
-//             FileMode::Binary => match self.file.call_method1("read", (buf.len(),)) {
-//                 Ok(obj) => {
-//                     // Check `fh.read` returned bytes, else raise a `TypeError`.
-//                     if let Ok(bytes) = obj.extract::<&PyBytes>() {
-//                         let b = bytes.as_bytes();
-//                         buf[..b.len()].copy_from_slice(b);
-//                         Ok(b.len())
-//                     } else {
-//                         let ty = obj.get_type().name()?.to_string();
-//                         let msg = format!("expected bytes, found {}", ty);
-//                         PyTypeError::new_err(msg).restore(self.file.py());
-//                         Err(IoError::new(
-//                             std::io::ErrorKind::Other,
-//                             "read method did not return bytes",
-//                         ))
-//                     }
-//                 }
-//                 Err(e) => {
-//                     transmute_file_error!(self, e, "read method failed", self.file.py())
-//                 }
-//             },
-//             // In text mode, we may be given more than `buf.len()` bytes if
-//             // we request `buf.len()` characters, in that case we store the
-//             // additional bytes into `self.buffer`
-//             FileMode::Text => {
-//
-//             }
-//         }
-//     }
-// }
+/// A wrapper for a Python file that can outlive the GIL.
+pub enum PyFileGILRead {
+    Binary(PyFileGILReadBin),
+    Text(PyFileGILReadText),
+}
+
+impl PyFileGILRead {
+    pub fn from_ref(file: &PyAny) -> PyResult<PyFileGILRead> {
+        let py = file.py();
+        let res = file.call_method1("read", (0,))?;
+        if res.cast_as::<PyBytes>().is_ok() {
+            let obj = file.into_py(py);
+            PyFileGILReadBin::new(py, obj).map(Self::Binary)
+        } else if res.cast_as::<PyString>().is_ok() {
+            let obj = file.into_py(py);
+            PyFileGILReadText::new(py, obj).map(Self::Text)
+        } else {
+            let ty = res.get_type().name()?.to_string();
+            Err(PyTypeError::new_err(format!(
+                "expected bytes or str, found {}",
+                ty
+            )))
+        }
+    }
+}
+
+impl Read for PyFileGILRead {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
+        match self {
+            PyFileGILRead::Binary(readbin) => readbin.read(buf),
+            PyFileGILRead::Text(readtext) => readtext.read(buf),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PyFileGILReadBin {
+    file: PyObject,
+    readinto: bool,
+}
+
+impl PyFileGILReadBin {
+    pub fn new(py: Python, file: PyObject) -> PyResult<Self> {
+        file.as_ref(py)
+            .hasattr("readinto")
+            .map(|readinto| Self { file, readinto })
+    }
+}
+
+impl Read for PyFileGILReadBin {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
+        // acquire a GIL
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        // emulate a PyFileRead
+        let reference = self.file.as_ref(py);
+        let mut reader = PyFileReadBin {
+            file: reference,
+            readinto: self.readinto,
+        };
+        reader.read(buf)
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PyFileGILReadText {
+    file: PyObject,
+    buffer: Vec<u8>,
+}
+
+impl PyFileGILReadText {
+    pub fn new(_py: Python, file: PyObject) -> PyResult<Self> {
+        Ok(Self {
+            file,
+            buffer: Vec::new(),
+        })
+    }
+}
+
+impl Read for PyFileGILReadText {
+    fn read(&mut self, mut buf: &mut [u8]) -> Result<usize, IoError> {
+        // acquire a GIL
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        // emulate a PyFileRead
+        let reference = self.file.as_ref(py);
+        let mut reader = PyFileReadText {
+            file: reference,
+            buffer: std::mem::take(&mut self.buffer),
+        };
+        // read and store the number of bytes read
+        let result = reader.read(buf);
+        // swap back the buffer and return result
+        std::mem::swap(&mut reader.buffer, &mut self.buffer);
+        result
+    }
+}
 
 // ---------------------------------------------------------------------------
 
@@ -294,68 +352,6 @@ impl<'p> Read for PyFileReadText<'p> {
 //             Err(e) => {
 //                 transmute_file_error!(self, e, "flush method failed", self.file.py())
 //             }
-//         }
-//     }
-// }
-
-// ---------------------------------------------------------------------------
-
-// /// A wrapper for a Python file that can outlive the GIL.
-// pub struct PyFileGILRead {
-//     file: Mutex<PyObject>,
-//     mode: FileMode,
-// }
-//
-// impl PyFileGILRead {
-//     pub fn from_ref(file: &PyAny) -> PyResult<PyFileGILRead> {
-//         let res = file.call_method1("read", (0,))?;
-//         if res.cast_as::<PyBytes>().is_ok() {
-//             Ok(PyFileGILRead {
-//                 file: Mutex::new(file.to_object(file.py())),
-//                 mode: FileMode::Binary,
-//             })
-//         } else if res.cast_as::<PyString>().is_ok() {
-//             Ok(PyFileGILRead {
-//                 file: Mutex::new(file.to_object(file.py())),
-//                 mode: FileMode::Text,
-//             })
-//         } else {
-//             let ty = res.get_type().name()?.to_string();
-//             Err(PyTypeError::new_err(format!(
-//                 "expected bytes, found {}",
-//                 ty
-//             )))
-//         }
-//     }
-//
-//     pub fn file(&self) -> &Mutex<PyObject> {
-//         &self.file
-//     }
-// }
-//
-// impl Read for PyFileGILRead {
-//     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
-//         let gil = Python::acquire_gil();
-//         let py = gil.python();
-//         let file = self.file.lock().unwrap();
-//         match file.to_object(py).call_method1(py, "read", (buf.len(),)) {
-//             Ok(obj) => {
-//                 // Check `fh.read` returned bytes, else raise a `TypeError`.
-//                 if let Ok(bytes) = obj.cast_as::<PyBytes>(py) {
-//                     let b = bytes.as_bytes();
-//                     buf[..b.len()].copy_from_slice(b);
-//                     Ok(b.len())
-//                 } else {
-//                     let ty = obj.as_ref(py).get_type().name()?.to_string();
-//                     let msg = format!("expected bytes, found {}", ty);
-//                     PyTypeError::new_err(msg).restore(py);
-//                     Err(IoError::new(
-//                         std::io::ErrorKind::Other,
-//                         "fh.read did not return bytes",
-//                     ))
-//                 }
-//             }
-//             Err(e) => transmute_file_error!(self, e, "read method failed", py),
 //         }
 //     }
 // }
