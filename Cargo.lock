@@ -114,6 +114,7 @@ version = "0.1.0"
 dependencies = [
  "built",
  "gb-io",
+ "lazy_static",
  "pyo3",
  "pyo3-built",
 ]

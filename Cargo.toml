@@ -21,6 +21,9 @@ pyo3-built = "0.4.6"
 [dependencies.pyo3]
 version = "0.15.1"
 
+[dev-dependencies]
+lazy_static = "1.4.0"
+
 [features]
 default = []
 extension-module = ["pyo3/extension-module"]
