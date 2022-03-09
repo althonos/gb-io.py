@@ -219,12 +219,14 @@ impl Record {
         Ok(())
     }
 
+    /// `bytes`: The sequence of the record in lowercase, as raw ASCII.
     #[getter]
     fn get_sequence(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
         let seq = slf.seq.read().expect("failed to read lock");
         Ok(PyBytes::new(slf.py(), &seq.seq).into())
     }
 
+    /// `~gb_io.Features`: A collection of features within the record.
     #[getter]
     fn get_features(slf: PyRef<'_, Self>) -> PyResult<Py<Features>> {
         Py::new(
@@ -403,6 +405,10 @@ impl Qualifier {
 #[pymodule]
 #[pyo3(name = "gb_io")]
 pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<self::Qualifier>()?;
+    m.add_class::<self::Qualifiers>()?;
+    m.add_class::<self::Feature>()?;
+    m.add_class::<self::Features>()?;
     m.add_class::<self::Record>()?;
     m.add_class::<self::RecordReader>()?;
     m.add("__package__", "gb_io")?;
