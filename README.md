@@ -92,7 +92,6 @@ with open("tests/data/AY048670.1.faa", "w") as dst:
     for record in gb_io.iter("tests/data/AY048670.1.gb"):
         for feature in filter(lambda feat: feat.type == "CDS", record.features):
             qualifiers = feature.qualifiers.to_dict()
-            print(qualifiers)
             dst.write(">{}\n".format(qualifiers["locus_tag"][0]))
             dst.write("{}\n".format(qualifiers["translation"][0]))
 ```
