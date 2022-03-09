@@ -2,18 +2,18 @@ extern crate gb_io;
 extern crate pyo3;
 extern crate pyo3_built;
 
-mod pyfile;
 mod built;
+mod pyfile;
 
 use std::io::Read;
 
-use pyo3_built::pyo3_built;
+use gb_io::reader::SeqReader;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
-use pyo3::exceptions::PyValueError;
-use gb_io::reader::SeqReader;
-use gb_io::seq::Seq;
+use pyo3_built::pyo3_built;
+
 use gb_io::seq::Topology;
 
 use self::pyfile::PyFileRead;
@@ -29,7 +29,7 @@ impl Record {
     /// `str`, optional: The name of the record, or `None`.
     #[getter]
     fn get_name(&self) -> PyResult<Option<&str>> {
-        Ok(self.seq.name.as_ref().map(String::as_str))
+        Ok(self.seq.name.as_deref())
     }
 
     #[setter]
@@ -99,7 +99,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::open(s.to_str()?) {
                 Ok(f) => std::io::BufReader::new(f),
-                Err(e) => unimplemented!("error management"),
+                Err(_e) => unimplemented!("error management"),
             };
             // store the path for later
             path = Some(s.to_str()?.to_string());
@@ -113,7 +113,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                 Ok(f) => std::io::BufReader::new(f),
                 // Object is not a binary file-handle: wrap the inner error
                 // into a `TypeError` and raise that error.
-                Err(e) => {
+                Err(_e) => {
                     unimplemented!("error management")
                     // raise!(py, PyTypeError("expected path or binary file handle") from e)
                 }
@@ -130,18 +130,17 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         };
 
         // create the reader
-        let mut reader = SeqReader::new(stream);
+        let reader = SeqReader::new(stream);
 
         // parse all records
-        let mut records = PyList::empty(py);
+        let records = PyList::empty(py);
         for result in reader {
             match result {
                 Ok(seq) => {
                     let object = Record { seq };
                     records.append(Py::new(py, object)?)?;
                 }
-                Err(error) => {
-
+                Err(_error) => {
                     unimplemented!("error management")
                 }
             }
