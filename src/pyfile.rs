@@ -114,7 +114,7 @@ impl<'p> Read for PyFileReadBin<'p> {
                     }
                 }
                 Err(e) => {
-                    transmute_file_error!(self, e, "read method failed", self.file.py())
+                    transmute_file_error!(self, e, "readinto method failed", self.file.py())
                 }
             }
         } else {

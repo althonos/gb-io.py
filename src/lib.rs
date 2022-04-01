@@ -621,8 +621,10 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                 Err(GbParserError::Io(e)) => {
                     return match e.raw_os_error() {
                         Some(code) => Err(PyOSError::new_err((code, e.to_string()))),
-                        // fixme: check if Python exception occured
-                        None => Err(PyOSError::new_err(e.to_string())),
+                        None => match PyErr::take(py) {
+                            Some(e) => Err(e),
+                            None => Err(PyOSError::new_err(e.to_string())),
+                        },
                     };
                 }
                 Err(GbParserError::SyntaxError(e)) => {
