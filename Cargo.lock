@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "gb-io"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "235618d3a09bf66208dffce5ddb0d3ce2b83b6ba624059dd6942e120f9b54a06"
+checksum = "387616b1e67a2c326231a86f1a62fb98e94f1da7c089817a00e332a96c2dbc21"
 dependencies = [
  "circular",
  "err-derive",
