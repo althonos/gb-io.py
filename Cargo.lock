@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "gb-io-py"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "built",
  "gb-io",
