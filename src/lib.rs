@@ -13,10 +13,14 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use gb_io::reader::SeqReader;
+use gb_io::seq::After;
+use gb_io::seq::Before;
+use gb_io::seq::Location as SeqLocation;
 use gb_io::seq::Seq;
 use gb_io::seq::Topology;
 use gb_io::QualifierKey;
 use pyo3::exceptions::PyIndexError;
+use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -301,7 +305,7 @@ impl Feature {
             let ty = seq.features[slf.index].kind.deref();
             Ok(PyString::new(py, ty).into_py(py))
         } else {
-            panic!("fuck")
+            Err(PyIndexError::new_err(slf.index))
         }
     }
 
@@ -314,6 +318,17 @@ impl Feature {
                 index: slf.index,
             },
         )
+    }
+
+    #[getter]
+    fn get_location<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let seq = slf.seq.read().expect("failed to read lock");
+        if slf.index < seq.features.len() {
+            Location::convert(py, &seq.features[slf.index].location)
+        } else {
+            Err(PyIndexError::new_err(slf.index))
+        }
     }
 }
 
@@ -400,11 +415,132 @@ impl Qualifier {
 
 // ---------------------------------------------------------------------------
 
+#[pyclass(module = "gb_io", subclass)]
+#[derive(Debug)]
+pub struct Location;
+
+impl Location {
+    fn convert(py: Python<'_>, location: &SeqLocation) -> PyResult<PyObject> {
+        match location {
+            SeqLocation::Range((start, Before(before)), (end, After(after))) => {
+                Py::new(py, Range::__new__(*start, *end, *before, *after)).map(|x| x.to_object(py))
+            }
+            SeqLocation::Between(start, end) => {
+                Py::new(py, Between::__new__(*start, *end)).map(|x| x.to_object(py))
+            }
+            SeqLocation::Complement(inner_location) => Location::convert(py, inner_location)
+                .and_then(|inner| Py::new(py, Complement::__new__(inner)))
+                .map(|x| x.to_object(py)),
+            _ => Err(PyNotImplementedError::new_err(format!(
+                "conversion of {:?}",
+                location
+            ))),
+        }
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct Range {
+    #[pyo3(get)]
+    start: i64,
+    #[pyo3(get)]
+    end: i64,
+    #[pyo3(get)]
+    before: bool,
+    #[pyo3(get)]
+    after: bool,
+}
+
+impl From<&Range> for SeqLocation {
+    fn from(range: &Range) -> SeqLocation {
+        SeqLocation::Range(
+            (range.start, Before(range.before)),
+            (range.end, After(range.after)),
+        )
+    }
+}
+
+#[pymethods]
+impl Range {
+    #[new]
+    #[args(before = "false", after = "false")]
+    fn __new__(start: i64, end: i64, before: bool, after: bool) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self {
+            start: start,
+            end: end,
+            before: before,
+            after: after,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        match (self.before, self.after) {
+            (false, false) => format!("Range({}, {})", self.start, self.end),
+            (true, false) => format!("Range({}, {}, before=True)", self.start, self.end),
+            (false, true) => format!("Range({}, {}, after=True)", self.start, self.end),
+            (true, true) => format!(
+                "Range({}, {}, before=True, after=True)",
+                self.start, self.end
+            ),
+        }
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct Between {
+    start: i64,
+    end: i64,
+}
+
+#[pymethods]
+impl Between {
+    #[new]
+    fn __new__(start: i64, end: i64) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self {
+            start: start,
+            end: end,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Between({}, {})", self.start, self.end)
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct Complement {
+    location: PyObject,
+}
+
+#[pymethods]
+impl Complement {
+    #[new]
+    fn __new__(location: PyObject) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self { location })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let s = PyString::new(py, "Complement({})")
+            .call_method1("format", (Py::clone_ref(&slf.location, py),))?;
+        Ok(s.to_object(py))
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 /// A fast GenBank I/O library based on the ``gb-io`` Rust crate.
 ///
 #[pymodule]
 #[pyo3(name = "gb_io")]
 pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<self::Location>()?;
+    m.add_class::<self::Range>()?;
+    m.add_class::<self::Complement>()?;
+    m.add_class::<self::Between>()?;
     m.add_class::<self::Qualifier>()?;
     m.add_class::<self::Qualifiers>()?;
     m.add_class::<self::Feature>()?;
