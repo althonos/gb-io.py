@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use gb_io::reader::SeqReader;
 
+use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -66,7 +67,13 @@ impl RecordReader {
         let p = path.as_ref();
         match Handle::try_from(p.to_owned()) {
             Ok(handle) => Self::new(SeqReader::new(handle)),
-            Err(_e) => unimplemented!("error management"),
+            Err(e) => {
+                if let Some(code) = e.raw_os_error() {
+                    Err(PyOSError::new_err((code, e.to_string())))
+                } else {
+                    Err(PyOSError::new_err(e.to_string()))
+                }
+            }
         }
     }
 

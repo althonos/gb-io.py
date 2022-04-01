@@ -12,6 +12,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use gb_io::reader::GbParserError;
 use gb_io::reader::SeqReader;
 use gb_io::seq::After;
 use gb_io::seq::Before;
@@ -21,7 +22,8 @@ use gb_io::seq::Topology;
 use gb_io::QualifierKey;
 use pyo3::exceptions::PyIndexError;
 use pyo3::exceptions::PyNotImplementedError;
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyOSError;
+use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -570,7 +572,12 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::open(s.to_str()?) {
                 Ok(f) => f,
-                Err(_e) => unimplemented!("error management"),
+                Err(e) => {
+                    return match e.raw_os_error() {
+                        Some(code) => Err(PyOSError::new_err((code, e.to_string()))),
+                        None => Err(PyOSError::new_err(e.to_string())),
+                    }
+                }
             };
             // store the path for later
             // path = Some(s.to_str()?.to_string());
@@ -584,9 +591,10 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                 Ok(f) => f,
                 // Object is not a binary file-handle: wrap the inner error
                 // into a `TypeError` and raise that error.
-                Err(_e) => {
-                    unimplemented!("error management")
-                    // raise!(py, PyTypeError("expected path or binary file handle") from e)
+                Err(e) => {
+                    let err = PyTypeError::new_err("expected path or binary file handle");
+                    err.set_cause(py, Some(e));
+                    return Err(err);
                 }
             };
             // extract the path from the `name` attribute
@@ -610,10 +618,16 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                 Ok(seq) => {
                     records.append(Py::new(py, Record::from(seq))?)?;
                 }
-                Err(error) => {
-                    // FIXME: error management
-                    let msg = format!("parser failed: {}", error);
-                    return Err(PyRuntimeError::new_err(msg));
+                Err(GbParserError::Io(e)) => {
+                    return match e.raw_os_error() {
+                        Some(code) => Err(PyOSError::new_err((code, e.to_string()))),
+                        // fixme: check if Python exception occured
+                        None => Err(PyOSError::new_err(e.to_string())),
+                    };
+                }
+                Err(GbParserError::SyntaxError(e)) => {
+                    let msg = format!("parser failed: {}", e);
+                    return Err(PyValueError::new_err(msg));
                 }
             }
         }
