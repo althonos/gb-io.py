@@ -423,6 +423,18 @@ pub struct Location;
 
 impl Location {
     fn convert(py: Python<'_>, location: &SeqLocation) -> PyResult<PyObject> {
+        macro_rules! convert_vec {
+            ($ty:ident, $inner:expr) => {{
+                let objects: PyObject = $inner
+                    .iter()
+                    .map(|loc| Location::convert(py, loc))
+                    .collect::<PyResult<Vec<PyObject>>>()
+                    .map(|objects| PyList::new(py, objects))
+                    .map(|list| list.to_object(py))?;
+                Py::new(py, Join::__new__(objects)).map(|x| x.to_object(py))
+            }};
+        }
+
         match location {
             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
                 Py::new(py, Range::__new__(*start, *end, *before, *after)).map(|x| x.to_object(py))
@@ -433,6 +445,10 @@ impl Location {
             SeqLocation::Complement(inner_location) => Location::convert(py, inner_location)
                 .and_then(|inner| Py::new(py, Complement::__new__(inner)))
                 .map(|x| x.to_object(py)),
+            SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
+            SeqLocation::Order(inner_locations) => convert_vec!(Order, inner_locations),
+            SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
+            SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
             _ => Err(PyNotImplementedError::new_err(format!(
                 "conversion of {:?}",
                 location
@@ -528,6 +544,86 @@ impl Complement {
         let py = slf.py();
         let s = PyString::new(py, "Complement({})")
             .call_method1("format", (Py::clone_ref(&slf.location, py),))?;
+        Ok(s.to_object(py))
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct Join {
+    locations: PyObject,
+}
+
+#[pymethods]
+impl Join {
+    #[new]
+    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let s = PyString::new(py, "Join({})").call_method1("format", (&slf.locations,))?;
+        Ok(s.to_object(py))
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct Order {
+    locations: PyObject,
+}
+
+#[pymethods]
+impl Order {
+    #[new]
+    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let s = PyString::new(py, "Order({})").call_method1("format", (&slf.locations,))?;
+        Ok(s.to_object(py))
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct Bond {
+    locations: PyObject,
+}
+
+#[pymethods]
+impl Bond {
+    #[new]
+    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let s = PyString::new(py, "Bond({})").call_method1("format", (&slf.locations,))?;
+        Ok(s.to_object(py))
+    }
+}
+
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct OneOf {
+    locations: PyObject,
+}
+
+#[pymethods]
+impl OneOf {
+    #[new]
+    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let s = PyString::new(py, "OneOf({})").call_method1("format", (&slf.locations,))?;
         Ok(s.to_object(py))
     }
 }
