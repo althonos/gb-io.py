@@ -508,7 +508,9 @@ impl Range {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Between {
+    #[pyo3(get)]
     start: i64,
+    #[pyo3(get)]
     end: i64,
 }
 
@@ -546,6 +548,22 @@ impl Complement {
             .call_method1("format", (Py::clone_ref(&slf.location, py),))?;
         Ok(s.to_object(py))
     }
+
+    #[getter]
+    fn get_start<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
+        let py = slf.py();
+        slf.location
+            .getattr(py, "end")
+            .and_then(|end| end.extract(py))
+    }
+
+    #[getter]
+    fn get_end<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
+        let py = slf.py();
+        slf.location
+            .getattr(py, "start")
+            .and_then(|start| start.extract(py))
+    }
 }
 
 #[pyclass(module = "gb_io", extends = Location)]
@@ -565,6 +583,38 @@ impl Join {
         let py = slf.py();
         let s = PyString::new(py, "Join({})").call_method1("format", (&slf.locations,))?;
         Ok(s.to_object(py))
+    }
+
+    #[getter]
+    fn get_start<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
+        let py = slf.py();
+        let mut min: Option<i32> = None;
+        for obj in slf.locations.cast_as::<PyList>(py)? {
+            let start = obj.getattr("start")?.extract::<i32>()?;
+            min = match min {
+                Some(i) if i < start => Some(i),
+                _ => Some(start),
+            }
+        }
+        min.ok_or(PyValueError::new_err(
+            "cannot get start coordinate of empty list of locations",
+        ))
+    }
+
+    #[getter]
+    fn get_end<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
+        let py = slf.py();
+        let mut min: Option<i32> = None;
+        for obj in slf.locations.cast_as::<PyList>(py)? {
+            let end = obj.getattr("end")?.extract::<i32>()?;
+            min = match min {
+                Some(i) if i > end => Some(i),
+                _ => Some(end),
+            }
+        }
+        min.ok_or(PyValueError::new_err(
+            "cannot get end coordinate of empty list of locations",
+        ))
     }
 }
 
