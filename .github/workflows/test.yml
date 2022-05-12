@@ -50,6 +50,8 @@ jobs:
       run: python -m pip install -U -r .github/workflows/requirements.txt
     - name: Build Rust extension
       run: python setup.py build_ext --inplace --debug
+    - name: Copy extensions file
+      run: cp src/*.so .
     - name: Test Rust extension
       run: python -m unittest discover -vv
       if: ${{ matrix.python-release != 'v3.6' }}
@@ -127,9 +129,13 @@ jobs:
       run: python -m pip install -U -r .github/workflows/requirements.txt
     - name: Build Rust extension
       run: python setup.py build_ext --inplace --debug
+    - name: Copy extensions file
+      run: cp src/*.so .
     - name: Test Rust extension
       run: python -m unittest discover -vv
       if: ${{ matrix.python-release != 'v3.6' }}
+      env:
+        PYTHONPATH: ${{ env.GITHUB_WORKSPACE }}/src
 
   coverage:
     name: Coverage
@@ -166,5 +172,3 @@ jobs:
         args: '-v --out Xml --ciserver github-actions'
     - name: Upload coverage statistics
       uses: codecov/codecov-action@v2
-      with:
-        flags: ${{ matrix.python-release }},${{ matrix.python-impl }}
