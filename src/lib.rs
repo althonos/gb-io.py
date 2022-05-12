@@ -689,6 +689,10 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<self::Range>()?;
     m.add_class::<self::Complement>()?;
     m.add_class::<self::Between>()?;
+    m.add_class::<self::Join>()?;
+    m.add_class::<self::Order>()?;
+    m.add_class::<self::Bond>()?;
+    m.add_class::<self::OneOf>()?;
     m.add_class::<self::Qualifier>()?;
     m.add_class::<self::Qualifiers>()?;
     m.add_class::<self::Feature>()?;
