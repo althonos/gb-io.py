@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.1.2...HEAD
+
+
+## [v0.1.2] - 2022-05-12
+[v0.1.2]: https://github.com/althonos/gb-io.py/compare/v0.1.1...v0.1.2
+
+### Added
+- Extraction of `Join`, `Order`, `Bond` and `OneOf` feature locations.
+- `start` and `end` properties for `Complement` and `Between`.
 
 
 ## [v0.1.1] - 2022-04-01
