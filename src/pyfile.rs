@@ -444,7 +444,19 @@ impl<'p> Write for PyFileWriteText<'p> {
         };
         let s = PyString::new(self.file.py(), decoded);
         match self.file.call_method1("write", (s,)) {
-            Ok(obj) => Ok(buf.len()), // FIXME?
+            Ok(obj) => {
+                if let Ok(len) = usize::extract(obj) {
+                    Ok(decoded[..len].as_bytes().len())
+                } else {
+                    let ty = obj.get_type().name()?.to_string();
+                    let msg = format!("expected int, found {}", ty);
+                    PyTypeError::new_err(msg).restore(self.file.py());
+                    Err(IoError::new(
+                        std::io::ErrorKind::Other,
+                        "write method did not return int",
+                    ))
+                }
+            }
             Err(e) => {
                 transmute_file_error!(self, e, "write method failed", self.file.py())
             }
