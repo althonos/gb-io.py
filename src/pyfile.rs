@@ -1,5 +1,7 @@
 use std::io::Error as IoError;
+use std::io::ErrorKind as IoErrorKind;
 use std::io::Read;
+use std::io::Write;
 
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;
@@ -308,48 +310,133 @@ impl Read for PyFileGILReadText {
 
 // ---------------------------------------------------------------------------
 
-// /// A wrapper around a writable Python file borrowed within a GIL lifetime.
-// pub struct PyFileWrite<'p> {
-//     file: &'p PyAny,
-// }
-//
-// impl<'p> PyFileWrite<'p> {
-//     pub fn from_ref(file: &'p PyAny) -> PyResult<PyFileWrite<'p>> {
-//         file.call_method1("write", (PyBytes::new(file.py(), b""),))
-//             .map(|_| PyFileWrite { file })
-//     }
-// }
-//
-// impl<'p> Write for PyFileWrite<'p> {
-//     fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
-//         let bytes = PyBytes::new(self.file.py(), buf);
-//         match self.file.call_method1("write", (bytes,)) {
-//             Ok(obj) => {
-//                 // Check `fh.write` returned int, else raise a `TypeError`.
-//                 if let Ok(len) = usize::extract(obj) {
-//                     Ok(len)
-//                 } else {
-//                     let ty = obj.get_type().name()?.to_string();
-//                     let msg = format!("expected int, found {}", ty);
-//                     PyTypeError::new_err(msg).restore(self.file.py());
-//                     Err(IoError::new(
-//                         std::io::ErrorKind::Other,
-//                         "write method did not return int",
-//                     ))
-//                 }
-//             }
-//             Err(e) => {
-//                 transmute_file_error!(self, e, "write method failed", self.file.py())
-//             }
-//         }
-//     }
-//
-//     fn flush(&mut self) -> Result<(), IoError> {
-//         match self.file.call_method0("flush") {
-//             Ok(_) => Ok(()),
-//             Err(e) => {
-//                 transmute_file_error!(self, e, "flush method failed", self.file.py())
-//             }
-//         }
-//     }
-// }
+/// A wrapper around a writable Python file borrowed within a GIL lifetime.
+#[derive(Debug, Clone)]
+pub enum PyFileWrite<'p> {
+    Binary(PyFileWriteBin<'p>),
+    Text(PyFileWriteText<'p>),
+}
+
+impl<'p> PyFileWrite<'p> {
+    pub fn from_ref(file: &'p PyAny) -> PyResult<Self> {
+        // try writing bytes
+        let bytes = PyBytes::new(file.py(), b"");
+        if file.call_method1("write", (bytes,)).is_ok() {
+            return PyFileWriteBin::new(file).map(Self::Binary);
+        };
+        // try writing strings
+        let s = PyString::new(file.py(), "");
+        match file.call_method1("write", (s,)) {
+            Ok(_) => PyFileWriteText::new(file).map(Self::Text),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<'p> Write for PyFileWrite<'p> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
+        match self {
+            PyFileWrite::Binary(writebin) => writebin.write(buf),
+            PyFileWrite::Text(writetext) => writetext.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), IoError> {
+        match self {
+            PyFileWrite::Binary(writebin) => writebin.flush(),
+            PyFileWrite::Text(writetext) => writetext.flush(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PyFileWriteBin<'p> {
+    file: &'p PyAny,
+}
+
+impl<'p> PyFileWriteBin<'p> {
+    pub fn new(file: &'p PyAny) -> PyResult<Self> {
+        Ok(Self { file })
+    }
+}
+
+impl<'p> Write for PyFileWriteBin<'p> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
+        // FIXME(@althonos): This is copying the buffer data into the bytes
+        //                   first, ideally we could just pass a `memoryview`
+        let bytes = PyBytes::new(self.file.py(), buf);
+        match self.file.call_method1("write", (bytes,)) {
+            Ok(obj) => {
+                // Check `fh.write` returned int, else raise a `TypeError`.
+                if let Ok(len) = usize::extract(obj) {
+                    Ok(len)
+                } else {
+                    let ty = obj.get_type().name()?.to_string();
+                    let msg = format!("expected int, found {}", ty);
+                    PyTypeError::new_err(msg).restore(self.file.py());
+                    Err(IoError::new(
+                        std::io::ErrorKind::Other,
+                        "write method did not return int",
+                    ))
+                }
+            }
+            Err(e) => {
+                transmute_file_error!(self, e, "write method failed", self.file.py())
+            }
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), IoError> {
+        match self.file.call_method0("flush") {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                transmute_file_error!(self, e, "flush method failed", self.file.py())
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PyFileWriteText<'p> {
+    file: &'p PyAny,
+}
+
+impl<'p> PyFileWriteText<'p> {
+    pub fn new(file: &'p PyAny) -> PyResult<Self> {
+        Ok(Self { file })
+    }
+}
+
+impl<'p> Write for PyFileWriteText<'p> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
+        // FIXME(@althonos): This will fail in the event the buffer does not
+        //                   contain valid UTF-8, which may be the case if
+        //                   the last character is not a complete code point.
+        //                   In that case, we should instead write as much as
+        //                   possible instead of failing.
+        let decoded = match std::str::from_utf8(buf) {
+            Ok(s) => s,
+            Err(e) => return Err(IoError::new(IoErrorKind::InvalidData, e)), // Err(e) => return Err(PyUnicodeError::new_err(e.to_string())),
+        };
+        let s = PyString::new(self.file.py(), decoded);
+        match self.file.call_method1("write", (s,)) {
+            Ok(obj) => Ok(buf.len()), // FIXME?
+            Err(e) => {
+                transmute_file_error!(self, e, "write method failed", self.file.py())
+            }
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), IoError> {
+        match self.file.call_method0("flush") {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                transmute_file_error!(self, e, "flush method failed", self.file.py())
+            }
+        }
+    }
+}

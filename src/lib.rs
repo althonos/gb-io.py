@@ -8,6 +8,7 @@ mod iter;
 mod pyfile;
 
 use std::io::Read;
+use std::io::Write;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -19,7 +20,9 @@ use gb_io::seq::Before;
 use gb_io::seq::Location as SeqLocation;
 use gb_io::seq::Seq;
 use gb_io::seq::Topology;
+use gb_io::writer::SeqWriter;
 use gb_io::QualifierKey;
+use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyIndexError;
 use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyOSError;
@@ -30,12 +33,15 @@ use pyo3::types::PyBytes;
 use pyo3::types::PyDate;
 use pyo3::types::PyDateAccess;
 use pyo3::types::PyDict;
+use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
+use pyo3::types::PyTuple;
 use pyo3_built::pyo3_built;
 
 use self::iter::RecordReader;
 use self::pyfile::PyFileRead;
+use self::pyfile::PyFileWrite;
 
 // ---------------------------------------------------------------------------
 
@@ -747,13 +753,6 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
                     return Err(err);
                 }
             };
-            // extract the path from the `name` attribute
-            // path = fh
-            //     .getattr("name")
-            //     .and_then(|n| n.downcast::<PyString>().map_err(PyErr::from))
-            //     .and_then(|s| s.to_str())
-            //     .map(|s| s.to_string())
-            //     .ok();
             // send the Python file-handle reference to the heap.
             Box::new(bf)
         };
@@ -806,6 +805,82 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
             Err(_) => RecordReader::from_handle(fh)?,
         };
         Py::new(py, reader)
+    }
+
+    /// Write one or more GenBank records to the given path or file handle.
+    ///
+    #[pyfn(m, escape_locus = "true", truncate_locus = "false")]
+    #[pyo3(
+        name = "dump",
+        text_signature = "(record, fh, *, escape_locus=True, truncate_locus=False)"
+    )]
+    fn dump(
+        py: Python,
+        records: &PyAny,
+        fh: &PyAny,
+        escape_locus: bool,
+        truncate_locus: bool,
+    ) -> PyResult<()> {
+        // extract either a path or a file-handle from the arguments
+        let stream: Box<dyn Write> = if let Ok(s) = fh.cast_as::<PyString>() {
+            // get a buffered reader to the resources pointed by `path`
+            let bf = match std::fs::File::create(s.to_str()?) {
+                Ok(f) => f,
+                Err(e) => {
+                    return match e.raw_os_error() {
+                        Some(code) => Err(PyOSError::new_err((code, e.to_string()))),
+                        None => Err(PyOSError::new_err(e.to_string())),
+                    }
+                }
+            };
+            // send the file reader to the heap.
+            Box::new(bf)
+        } else {
+            // get a buffered writer by wrapping the file handle
+            let bf = match PyFileWrite::from_ref(fh) {
+                // Object is a binary file-handle: attempt to parse the
+                // document and return an `OboDoc` object.
+                Ok(f) => f,
+                // Object is not a binary file-handle: wrap the inner error
+                // into a `TypeError` and raise that error.
+                Err(e) => {
+                    let err = PyTypeError::new_err("expected path or binary file handle");
+                    err.set_cause(py, Some(e));
+                    return Err(err);
+                }
+            };
+            // send the Python file-handle reference to the heap.
+            Box::new(bf)
+        };
+
+        // create the writer
+        let mut writer = SeqWriter::new(stream);
+        writer.truncate_locus(truncate_locus);
+        writer.escape_locus(escape_locus);
+
+        // if a single record was given, wrap it in an iterable
+        let it = if let Ok(record) = records.extract::<Py<Record>>() {
+            PyIterator::from_object(py, PyTuple::new(py, [record]))?
+        } else {
+            PyIterator::from_object(py, records)?
+        };
+
+        // write sequences
+        for result in it {
+            // make sure we received a Record object
+            let record = result?.extract::<Py<Record>>()?;
+            let cell = record.as_ref(py);
+            let cellref = cell.borrow();
+            // get the seq object
+            let seq = cellref.seq.read().expect("cannot read lock");
+            // write the seq
+            writer.write(&seq).map_err(|err| match err.raw_os_error() {
+                Some(code) => PyIOError::new_err((code, err.to_string())),
+                None => PyIOError::new_err(err.to_string()),
+            })?;
+        }
+
+        Ok(())
     }
 
     Ok(())
