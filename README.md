@@ -43,6 +43,8 @@ Wheels are provided for the following platforms:
 - Linux, CPython, Aarch64
 - MacOS, CPython, x86-64
 - MacOS, PyPy, x86-64
+- Windows, CPython, x86-64
+- Windows, PyPy, x86-64
 
 Otherwise, the source distribution will be downloaded, and a local copy of
 the Rust compiler will be downloaded to build the package, unless it is
@@ -78,6 +80,13 @@ method, which returns an iterator instead of a list:
 ```python
 for record in gb_io.iter("tests/data/AY048670.1.gb"):
     print(record.name, record.sequence[:10])
+```
+
+You can use the `gb_io.dump` method to write one or more records to a file
+(either given as a path, or a file-like handle):
+```python
+with open("tests/data/AY048670.1.gb", "wb") as file:
+    gb_io.dump(records, file)
 ```
 
 ## 📝 Example
