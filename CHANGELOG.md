@@ -6,7 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.2.0...HEAD
+
+
+## [v0.2.0] - 2022-08-16
+[v0.2.0]: https://github.com/althonos/gb-io.py/compare/v0.1.2...v0.2.0
+
+### Added
+- `gb_io.dump` method to write one or more `Record` objects to a file.
+
+### Fixed
+- Compilation issues with modern `setuptools-rust` versions.
+- Avoid using `readinto` method of file-like objects when compiling for PyPy because of compatibility issues with passing `memoryview` arguments.
 
 
 ## [v0.1.2] - 2022-05-12
