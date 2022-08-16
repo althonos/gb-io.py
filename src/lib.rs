@@ -713,7 +713,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     /// Load all GenBank records from the given path or file handle.
     ///
     /// Arguments:
-    ///     fh (str or file-handle): The path to a GenBank file, or a
+    ///     fh (`str` or file-handle): The path to a GenBank file, or a
     ///         stream that contains data serialized in GenBank format.
     ///
     /// Returns:
@@ -790,12 +790,12 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     /// Iterate over the GenBank records in the given file or file handle.
     ///
     /// Arguments:
-    ///     fh (str or file-handle): The path to a GenBank file, or a stream
-    ///         that contains data serialized in GenBank format.
+    ///     fh (`str` or file-handle): The path to a GenBank file, or a
+    ///         stream that contains data serialized in GenBank format.
     ///
     /// Returns:
-    ///     `gb_io.RecordReader`: An iterator over the GenBank records in the
-    ///     given file or file-handle.
+    ///     `~gb_io.RecordReader`: An iterator over the GenBank records in
+    ///     the given file or file-handle.
     ///
     #[pyfn(m)]
     #[pyo3(name = "iter", text_signature = "(fh)")]
@@ -809,10 +809,23 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
 
     /// Write one or more GenBank records to the given path or file handle.
     ///
-    #[pyfn(m, escape_locus = "true", truncate_locus = "false")]
+    /// Arguments:
+    ///     records (`Record` or iterable of `Record`): The records to write
+    ///         to the file.
+    ///     fh (str or file-handle): The path to a GenBank file, or a stream
+    ///         that contains data serialized in GenBank format.
+    ///
+    /// Keywords Arguments:
+    ///     escape_locus (`bool`): Pass `True` to escape any whitespace in
+    ///         the locus name with an underscore character.
+    ///     truncate_locus (`bool`): Pass `True` to trim the locus fields
+    ///          so that the locus line is no longer than 79 characters.
+    ///
+    /// .. versionadded:: 0.2.0
+    #[pyfn(m, escape_locus = "false", truncate_locus = "false")]
     #[pyo3(
         name = "dump",
-        text_signature = "(record, fh, *, escape_locus=True, truncate_locus=False)"
+        text_signature = "(records, fh, *, escape_locus=False, truncate_locus=False)"
     )]
     fn dump(
         py: Python,
