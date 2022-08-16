@@ -83,6 +83,8 @@ class build_rust(_build_rust):
             self.extensions[0].strip = rust.Strip.No
         if nightly:
             self.extensions[0].features = (*self.extensions[0].features, "nightly")
+        if sys.implementation.name == "cpython":
+            self.extensions[0].features = (*self.extensions[0].features, "cpython")
 
         _build_rust.run(self)
 

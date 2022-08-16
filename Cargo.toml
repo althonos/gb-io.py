@@ -27,5 +27,6 @@ lazy_static = "1.4.0"
 
 [features]
 default = []
+cpython = []
 extension-module = ["pyo3/extension-module"]
 nightly = ["pyo3/nightly"]

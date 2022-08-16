@@ -80,8 +80,18 @@ pub struct PyFileReadBin<'p> {
 
 impl<'p> PyFileReadBin<'p> {
     pub fn new(file: &'p PyAny) -> PyResult<Self> {
-        file.hasattr("readinto")
-            .map(|readinto| Self { file, readinto })
+        #[cfg(feature = "cpython")]
+        {
+            file.hasattr("readinto")
+                .map(|readinto| Self { file, readinto })
+        }
+        #[cfg(not(feature = "cpython"))]
+        {
+            Ok(Self {
+                file,
+                readinto: false,
+            })
+        }
     }
 }
 
@@ -251,9 +261,19 @@ pub struct PyFileGILReadBin {
 
 impl PyFileGILReadBin {
     pub fn new(py: Python, file: PyObject) -> PyResult<Self> {
-        file.as_ref(py)
-            .hasattr("readinto")
-            .map(|readinto| Self { file, readinto })
+        #[cfg(feature = "cpython")]
+        {
+            file.as_ref(py)
+                .hasattr("readinto")
+                .map(|readinto| Self { file, readinto })
+        }
+        #[cfg(not(feature = "cpython"))]
+        {
+            Ok(Self {
+                file,
+                readinto: false,
+            })
+        }
     }
 }
 
