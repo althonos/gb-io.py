@@ -16,7 +16,7 @@ version  = "0.5.1"
 features = ["chrono"]
 
 [dependencies]
-libc = "0.2.62"
+libc = "0.2.138"
 gb-io = "0.7.1"
 pyo3-built = "0.4.6"
 [dependencies.pyo3]
