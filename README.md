@@ -6,7 +6,7 @@
 [GenBank]: https://www.ncbi.nlm.nih.gov/genbank/
 [Rust]: https://www.rust-lang.org/
 
-[![Actions](https://img.shields.io/github/workflow/status/althonos/gb-io.py/Test/main?logo=github&style=flat-square&maxAge=300)](https://github.com/althonos/gb-io.py/actions)
+[![Actions](https://img.shields.io/github/actions/workflow/status/althonos/gb-io.py/test.yml?branch=main&logo=github&style=flat-square&maxAge=300)](https://github.com/althonos/gb-io.py/actions)
 [![Coverage](https://img.shields.io/codecov/c/gh/althonos/gb-io.py?style=flat-square&maxAge=3600)](https://codecov.io/gh/althonos/gb-io.py/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square&maxAge=2678400)](https://choosealicense.com/licenses/mit/)
 [![PyPI](https://img.shields.io/pypi/v/gb-io.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/gb-io)
