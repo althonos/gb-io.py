@@ -262,6 +262,36 @@ impl From<Seq> for Record {
 
 // ---------------------------------------------------------------------------
 
+/// The source of a GenBank record.
+#[pyclass(module = "gb_io")]
+#[derive(Debug)]
+pub struct Source {
+    seq: Arc<RwLock<Seq>>,
+}
+
+#[pymethods]
+impl Source {
+    #[getter]
+    fn get_source<'py>(slf: PyRef<'py, Self>) -> PyObject {
+        let py = slf.py();
+        let seq = slf.seq.read().expect("failed to read lock");
+        PyString::new(py, &seq.source.as_ref().unwrap().source).to_object(py)
+    }
+
+    #[getter]
+    fn get_organism<'py>(slf: PyRef<'py, Self>) -> Option<PyObject> {
+        let py = slf.py();
+        let seq = slf.seq.read().expect("failed to read lock");
+        if let Some(organism) = &seq.source.as_ref().unwrap().organism {
+            Some(PyString::new(py, organism).to_object(py))
+        } else {
+            None
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 /// A collection of features in a single record.
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
