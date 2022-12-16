@@ -6,7 +6,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.2.1...HEAD
+
+
+## [v0.2.1] - 2022-12-16
+[v0.2.1]: https://github.com/althonos/gb-io.py/compare/v0.2.0...v0.2.1
+
+### Added
+- `source` and `organism` properties to `Record` objects.
+- Support for Python 3.11.
+
+### Changed
+- Bumped `pyo3` dependency to `v0.17.3`.
+
+### Removed
+- Support for Python 3.6.
 
 
 ## [v0.2.0] - 2022-08-16
