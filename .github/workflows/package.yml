@@ -7,315 +7,187 @@ on:
 
 jobs:
 
-  wheel-linux-x86:
-    runs-on: ubuntu-latest
-    name: Build Linux x86 wheels
-    strategy:
-      matrix:
-        python-version: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310]
-    env:
-      pyo3-python: /opt/python/${{ matrix.python-version }}/bin/python
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v1
-    - name: Build manylinux wheels
-      uses: addnab/docker-run-action@v2
-      with:
-        image: quay.io/pypa/manylinux2014_x86_64
-        options: -v ${{ github.workspace }}:/io -e TERM=$TERM
-        shell: bash
-        run: |
-          ${{ env.pyo3-python }} -m pip install -U -r /io/.github/workflows/requirements.txt
-          ${{ env.pyo3-python }} -m pip wheel -vv /io -w /tmp
-          for whl in /tmp/*.whl; do ${{ env.pyo3-python }} -m auditwheel repair $whl -w /io/dist; done
-    - name: Store built wheels
-      uses: actions/upload-artifact@v2
-      with:
-          name: dist
-          path: dist/*
-
-  test-linux-x86:
-    runs-on: ubuntu-latest
-    name: Test Linux x86 wheels
-    needs:
-    - wheel-linux-x86
-    strategy:
-      matrix:
-        python-version:
-        - 3.7
-        - 3.8
-        - 3.9
-        - '3.10'
-    steps:
-    - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Download built wheels
-      uses: actions/download-artifact@v2
-      with:
-          name: dist
-          path: dist
-    - name: Update pip to latest version
-      run: python -m pip install -U pip setuptools wheel
-    - name: Install built wheel
-      run: python -m pip install --no-index --find-links=dist gb-io
-    - name: Check compiled module
-      run: python -c 'import pprint; import gb_io; pprint.pprint(gb_io.__build__)'
-
   wheel-linux-aarch64:
-    runs-on: ubuntu-latest
-    name: Build Linux Aarch64 wheels
+    name: Build Linux wheels (Aarch64)
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310]
-    env:
-      pyo3-python: /opt/python/${{ matrix.python-version }}/bin/python
+        python-tag:
+        - cp37-manylinux_aarch64
+        - cp38-manylinux_aarch64
+        - cp39-manylinux_aarch64
+        - cp310-manylinux_aarch64
+        - cp311-manylinux_aarch64
+        - pp37-manylinux_aarch64
+        - pp38-manylinux_aarch64
+        - pp39-manylinux_aarch64
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v1
+    - uses: actions/checkout@v3
     - name: Set up QEMU
       id: qemu
-      uses: docker/setup-qemu-action@v1
+      uses: docker/setup-qemu-action@v2
+      with:
+        platforms: all
     - name: Build manylinux wheels
-      uses: addnab/docker-run-action@v2
-      with:
-        image: quay.io/pypa/manylinux2014_aarch64
-        options: -v ${{ github.workspace }}:/io -e TERM=$TERM
-        shell: bash
-        run: |
-          ${{ env.pyo3-python }} -m pip install -U -r /io/.github/workflows/requirements.txt
-          ${{ env.pyo3-python }} -m pip wheel -vv /io -w /tmp
-          for whl in /tmp/*.whl; do ${{ env.pyo3-python }} -m auditwheel repair $whl -w /io/dist; done
-    - name: Store built wheels
-      uses: actions/upload-artifact@v2
-      with:
-          name: dist
-          path: dist/*
-
-  test-linux-aarch64:
-    runs-on: ubuntu-latest
-    name: Test Linux Aarch64 wheels
-    needs:
-    - wheel-linux-aarch64
-    strategy:
-      matrix:
-        include:
-        - python-version: 3.7
-          pyo3-python: /opt/python/cp37-cp37m/bin/python
-          image-tag: latest
-        - python-version: 3.8
-          pyo3-python: /opt/python/cp38-cp38/bin/python
-          image-tag: latest
-        - python-version: 3.9
-          pyo3-python: /opt/python/cp39-cp39/bin/python
-          image-tag: latest
-        - python-version: '3.10'
-          pyo3-python: /opt/python/cp310-cp310/bin/python
-          image-tag: latest
-    steps:
-    - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Download built wheels
-      uses: actions/download-artifact@v2
-      with:
-          name: dist
-          path: dist
-    - name: Set up QEMU
-      id: qemu
-      uses: docker/setup-qemu-action@v1
-    - name: Test built wheels
-      uses: addnab/docker-run-action@v2
-      with:
-        image: quay.io/pypa/manylinux2014_aarch64:${{ matrix.image-tag }}
-        options: -v ${{ github.workspace }}:/io -e TERM=$TERM
-        shell: bash
-        run: |
-          ${{ matrix.pyo3-python }} -m pip install gb-io --no-index --find-links=/io/dist
-          ${{ matrix.pyo3-python }} -c 'import pprint; import gb_io; pprint.pprint(gb_io.__build__)'
-
-  wheel-macos-x86:
-    runs-on: macos-latest
-    name: Build MacOS x86 wheels
-    strategy:
-      matrix:
-        python-version:
-        - "3.7"
-        - "3.8"
-        - "3.9"
-        - "3.10"
-        - pypy-3.7
-        - pypy-3.8
-        - pypy-3.9
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install build package
-      run: python -m pip install -U -r .github/workflows/requirements.txt
-    - name: Build wheel distribution
-      run: python setup.py bdist_wheel
+      uses: pypa/cibuildwheel@v2.11.3
       env:
-        MACOSX_DEPLOYMENT_TARGET: 10.9
-    - name: Store built wheels
-      uses: actions/upload-artifact@v2
+        CIBW_ARCHS: aarch64
+        CIBW_BUILD: ${{ matrix.python-tag }}
+        CIBW_BEFORE_ALL: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh /dev/stdin -y"
+        CIBW_BUILD_VERBOSITY: 2
+        CIBW_ENVIRONMENT: CARGO_NET_GIT_FETCH_WITH_CLI=true
       with:
-          name: dist
-          path: dist/*
-
-  test-macos-x86:
-    runs-on: macos-latest
-    name: Test MacOS x86 wheels
-    needs:
-    - wheel-macos-x86
-    strategy:
-      matrix:
-        python-version:
-        - 3.7
-        - 3.8
-        - 3.9
-        - '3.10'
-    steps:
-    - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+        output-dir: dist
+    - uses: actions/upload-artifact@v3
       with:
-        python-version: ${{ matrix.python-version }}
-    - name: Download built wheels
-      uses: actions/download-artifact@v2
-      with:
-          name: dist
-          path: dist
-    - name: Update pip to latest version
-      run: python -m pip install -U pip setuptools wheel
-    - name: Install built wheel
-      run: python -m pip install --no-index --find-links=dist gb-io
-    - name: Check compiled module
-      run: python -c 'import pprint; import gb_io; pprint.pprint(gb_io.__build__)'
-
-  wheel-windows-x86:
-    runs-on: windows-latest
-    name: Build Windows x86 wheels
-    strategy:
-      matrix:
-        python-version:
-        - 3.7
-        - 3.8
-        - 3.9
-        - '3.10'
-        - pypy-3.7
-        - pypy-3.8
-        - pypy-3.9
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        submodules: true
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-        architecture: x64
-    - name: Install Python requirements
-      run: python -m pip install -r .github/workflows/requirements.txt
-    - name: Build wheel distribution
-      run: python setup.py bdist_wheel
-    - name: Store built wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: dist
+        name: wheels
         path: dist/*
 
-  test-windows-x86:
-    runs-on: windows-latest
-    name: Test Windows x86 wheels
-    needs:
-    - wheel-windows-x86
+  wheel-linux-x86_64:
+    name: Build Linux wheels (x86-64)
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version:
-        - 3.7
-        - 3.8
-        - 3.9
-        - '3.10'
-        - pypy-3.7
-        - pypy-3.8
-        - pypy-3.9
+        python-tag:
+        - cp37-manylinux_x86_64
+        - cp38-manylinux_x86_64
+        - cp39-manylinux_x86_64
+        - cp310-manylinux_x86_64
+        - cp311-manylinux_x86_64
+        - pp37-manylinux_x86_64
+        - pp38-manylinux_x86_64
+        - pp39-manylinux_x86_64
     steps:
-    - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
       with:
-        python-version: ${{ matrix.python-version }}
-    - name: Download built wheels
-      uses: actions/download-artifact@v2
+        toolchain: stable
+        override: true
+    - name: Build manylinux wheels
+      uses: pypa/cibuildwheel@v2.11.3
+      env:
+        CIBW_ARCHS: x86_64
+        CIBW_BUILD: ${{ matrix.python-tag }}
+        CIBW_BEFORE_ALL: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh /dev/stdin -y"
+        CIBW_BUILD_VERBOSITY: 2
+        CIBW_ENVIRONMENT: CARGO_NET_GIT_FETCH_WITH_CLI=true
       with:
-          name: dist
-          path: dist
-    - name: Install built wheel
-      run: python -m pip install --no-index --find-links=dist gb-io
-    - name: Check compiled module
-      run: python -c 'import pprint; import gb_io; pprint.pprint(gb_io.__build__)'
+        output-dir: dist
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wheels
+        path: dist/*
 
-  sdist:
-    runs-on: ubuntu-latest
-    name: Build source distribution
+  wheel-macos-x86_64:
+    name: Build MacOS wheels (x86-64)
+    runs-on: macOS-11
+    strategy:
+      matrix:
+        python-tag:
+        - cp37-macosx_x86_64
+        - cp38-macosx_x86_64
+        - cp39-macosx_x86_64
+        - cp310-macosx_x86_64
+        - cp311-macosx_x86_64
+        - pp37-macosx_x86_64
+        - pp38-macosx_x86_64
+        - pp39-macosx_x86_64
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v1
-    - name: Setup Python 3.10
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
       with:
-        python-version: '3.10'
-    - name: Setup Rust stable
-      uses: ATiltedTree/setup-rust@v1
+        toolchain: stable
+        override: true
+    - name: Build manylinux wheels
+      uses: pypa/cibuildwheel@v2.11.3
+      env:
+        CIBW_ARCHS: x86_64
+        CIBW_BUILD: ${{ matrix.python-tag }}
+        CIBW_BEFORE_ALL: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh /dev/stdin -y"
+        CIBW_BUILD_VERBOSITY: 2
+        CIBW_ENVIRONMENT: CARGO_NET_GIT_FETCH_WITH_CLI=true
       with:
-        rust-version: stable
-    - name: Install CI requirements
-      run: python -m pip install -U -r .github/workflows/requirements.txt
-    - name: Build source tarball with vendored sources
-      run: python setup.py vendor sdist
-    - name: Store built archive
-      uses: actions/upload-artifact@v2
+        output-dir: dist
+    - uses: actions/upload-artifact@v3
       with:
-          name: dist
-          path: dist/*
+        name: wheels
+        path: dist/*
 
-  test-sdist:
-    runs-on: ubuntu-latest
-    name: Test source distribution
-    needs:
-    - sdist
+  wheel-macos-aarch64:
+    name: Build MacOS wheels (Aarch64)
+    runs-on: macOS-11
+    strategy:
+      matrix:
+        python-tag:
+        - cp38-macosx_arm64
+        - cp39-macosx_arm64
+        - cp310-macosx_arm64
+        - cp311-macosx_arm64
     steps:
-    - name: Setup Python 3.10
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
       with:
-        python-version: '3.10'
-    - name: Download source distribution
-      uses: actions/download-artifact@v2
+        toolchain: stable
+        override: true
+        target: aarch64-apple-darwin
+    - name: Build manylinux wheels
+      uses: pypa/cibuildwheel@v2.11.3
+      env:
+        CIBW_ARCHS: arm64
+        CIBW_BUILD: ${{ matrix.python-tag }}
+        CIBW_BEFORE_ALL: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh /dev/stdin -y"
+        CIBW_BUILD_VERBOSITY: 2
+        CIBW_ENVIRONMENT: CARGO_NET_GIT_FETCH_WITH_CLI=true
       with:
-          name: dist
-          path: dist/
-    - name: Update pip to latest version
-      run: python -m pip install -U pip setuptools wheel
-    - name: Install source distribution
-      run: python -m pip install --no-binary gb-io --find-links=dist gb-io
-    - name: Check compiled module
-      run: python -c 'import pprint; import gb_io; pprint.pprint(gb_io.__build__)'
+        output-dir: dist
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wheels
+        path: dist/*
+
+  wheel-win32-x86_64:
+    name: Build Windows wheels (x86-64)
+    runs-on: windows-2019
+    strategy:
+      matrix:
+        python-tag:
+        - cp37-win_amd64
+        - cp38-win_amd64
+        - cp39-win_amd64
+        - cp310-win_amd64
+        - cp311-win_amd64
+        - pp37-win_amd64
+        - pp38-win_amd64
+        - pp39-win_amd64
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - name: Build manylinux wheels
+      uses: pypa/cibuildwheel@v2.11.3
+      env:
+        CIBW_ARCHS: AMD64
+        CIBW_BUILD: ${{ matrix.python-tag }}
+        CIBW_BUILD_VERBOSITY: 2
+      with:
+        output-dir: dist
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wheels
+        path: dist/*
 
   upload:
     environment: PyPI
     runs-on: ubuntu-latest
     name: Upload
     needs:
-    - test-linux-aarch64
-    - test-linux-x86
-    - test-macos-x86
-    - test-windows-x86
-    - test-sdist
+    - wheel-linux-aarch64
+    - wheel-linux-x86_64
+    - wheel-macos-aarch64
+    - wheel-macos-x86_64
+    - wheel-win32-x86_64
     steps:
     - name: Checkout code
       uses: actions/checkout@v1
@@ -325,10 +197,12 @@ jobs:
         python-version: "3.10"
     - name: Install CI requirements
       run: python -m pip install -U -r .github/workflows/requirements.txt
-    - name: Download built distributions
+    - name: Build source tarball with vendored sources
+      run: python setup.py vendor sdist
+    - name: Download built wheels
       uses: actions/download-artifact@v2
       with:
-        name: dist
+        name: wheels
         path: dist
     - name: Publish distributions to PyPI
       if: startsWith(github.ref, 'refs/tags')
@@ -341,14 +215,12 @@ jobs:
   release:
     environment: GitHub Releases
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/v')"
+    if: "!contains(github.ref, 'rc')"
     name: Release
     needs: upload
     steps:
     - name: Checkout code
       uses: actions/checkout@v1
-      with:
-        submodules: true
     - name: Release a Changelog
       uses: rasmus-saks/release-a-changelog-action@v1.0.1
       with:
