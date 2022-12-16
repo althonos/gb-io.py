@@ -22,17 +22,6 @@ pub enum Handle {
     PyFile(PyFileGILRead),
 }
 
-// impl Handle {
-//     fn handle(&self) -> PyObject {
-//         let gil = Python::acquire_gil();
-//         let py = gil.python();
-//         match self {
-//             Handle::FsFile(_, path) => path.display().to_string().to_object(py),
-//             Handle::PyFile(f) => f.file().lock().unwrap().to_object(py),
-//         }
-//     }
-// }
-
 impl TryFrom<PathBuf> for Handle {
     type Error = std::io::Error;
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
@@ -85,16 +74,6 @@ impl RecordReader {
     }
 }
 
-// #[pyproto]
-// impl PyObjectProtocol for RecordReader {
-//     fn __repr__(&self) -> PyResult<PyObject> {
-//         let gil = Python::acquire_gil();
-//         let py = gil.python();
-//         let fmt = PyString::new(py, "gb_io.RecordReader({!r})").to_object(py);
-//         fmt.call_method1(py, "format", (&self.reader.as_ref().get_ref().handle(),))
-//     }
-// }
-
 #[pymethods]
 impl RecordReader {
     fn __iter__<'p>(slf: PyRefMut<'p, Self>) -> PyResult<PyRefMut<'p, Self>> {
@@ -106,15 +85,15 @@ impl RecordReader {
             None => Ok(None),
             Some(Ok(seq)) => Ok(Some(Record::from(seq))),
             Some(Err(e)) => {
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-                if PyErr::occurred(py) {
-                    Err(PyErr::fetch(py))
-                } else {
-                    // FIXME: error management
-                    let msg = format!("parser failed: {}", e);
-                    Err(PyRuntimeError::new_err(msg))
-                }
+                Python::with_gil(|py| {
+                    if PyErr::occurred(py) {
+                        Err(PyErr::fetch(py))
+                    } else {
+                        // FIXME: error management
+                        let msg = format!("parser failed: {}", e);
+                        Err(PyRuntimeError::new_err(msg))
+                    }
+                })
             }
         }
     }

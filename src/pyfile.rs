@@ -279,16 +279,14 @@ impl PyFileGILReadBin {
 
 impl Read for PyFileGILReadBin {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
-        // acquire a GIL
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        // emulate a PyFileRead
-        let reference = self.file.as_ref(py);
-        let mut reader = PyFileReadBin {
-            file: reference,
-            readinto: self.readinto,
-        };
-        reader.read(buf)
+        Python::with_gil(|py| {
+            let reference = self.file.as_ref(py);
+            let mut reader = PyFileReadBin {
+                file: reference,
+                readinto: self.readinto,
+            };
+            reader.read(buf)
+        })
     }
 }
 
@@ -311,20 +309,19 @@ impl PyFileGILReadText {
 
 impl Read for PyFileGILReadText {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
-        // acquire a GIL
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        // emulate a PyFileRead
-        let reference = self.file.as_ref(py);
-        let mut reader = PyFileReadText {
-            file: reference,
-            buffer: std::mem::take(&mut self.buffer),
-        };
-        // read and store the number of bytes read
-        let result = reader.read(buf);
-        // swap back the buffer and return result
-        std::mem::swap(&mut reader.buffer, &mut self.buffer);
-        result
+        Python::with_gil(|py| {
+            // emulate a PyFileRead
+            let reference = self.file.as_ref(py);
+            let mut reader = PyFileReadText {
+                file: reference,
+                buffer: std::mem::take(&mut self.buffer),
+            };
+            // read and store the number of bytes read
+            let result = reader.read(buf);
+            // swap back the buffer and return result
+            std::mem::swap(&mut reader.buffer, &mut self.buffer);
+            result
+        })
     }
 }
 
