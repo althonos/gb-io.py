@@ -12,7 +12,7 @@ name = "gb_io_py"
 doctest = false
 
 [build-dependencies.built]
-version  = "0.5.1"
+version  = "0.6.0"
 features = ["chrono"]
 
 [dependencies]
