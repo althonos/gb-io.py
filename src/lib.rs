@@ -54,6 +54,52 @@ pub struct Record {
 
 #[pymethods]
 impl Record {
+    /// Create a new record.
+    #[new]
+    #[pyo3(signature = (sequence, *, name = None, division = String::from("UNK"), circular = false, accession = None, version = None))]
+    fn __init__<'py>(
+        sequence: &'py PyAny,
+        name: Option<String>,
+        division: String,
+        circular: bool,
+        accession: Option<String>,
+        version: Option<String>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let seq = if let Ok(sequence_str) = sequence.downcast::<PyString>() {
+            sequence_str.to_str()?.as_bytes().to_vec()
+        } else if let Ok(sequence_bytes) = sequence.downcast::<PyBytes>() {
+            sequence_bytes.as_bytes().to_vec()
+        } else {
+            return Err(PyTypeError::new_err("Expected str or bytes for `sequence`"));
+        };
+
+        let topology = match circular {
+            true => Topology::Circular,
+            false => Topology::Linear,
+        };
+
+        let record = Record::from(Seq {
+            name,
+            division,
+            seq,
+            topology,
+            contig: None,
+            features: Vec::new(),
+            comments: Vec::new(),
+            date: None,
+            len: None,
+            molecule_type: None,
+            definition: None,
+            accession,
+            version,
+            source: None,
+            dblink: None,
+            keywords: None,
+            references: Vec::new(),
+        });
+        Ok(record.into())
+    }
+
     /// `str`, optional: The name of the record, or `None`.
     #[getter]
     fn get_name(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
