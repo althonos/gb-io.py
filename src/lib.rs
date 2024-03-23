@@ -46,13 +46,19 @@ use self::pyfile::PyFileWrite;
 
 // ---------------------------------------------------------------------------
 
-pub struct Interner;
+pub struct PyInterner;
+
+impl PyInterner {
+    pub fn intern<S: AsRef<str>>(&self, py: Python, s: S) -> Py<PyString> {
+        PyString::new(py, s.as_ref()).into()
+    }
+}
 
 pub trait Convert: Sized {
     type Output;
-    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output>;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output>;
     fn convert(self, py: Python) -> PyResult<Self::Output> {
-        self.convert_with(py, &mut Interner)
+        self.convert_with(py, &mut PyInterner)
     }
 }
 
@@ -62,7 +68,7 @@ where
     <T as Convert>::Output: ToPyObject,
 {
     type Output = Py<PyList>;
-    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
         let l = PyList::empty(py);
         for elem in self.into_iter() {
             l.append(elem.convert_with(py, interner)?)?;
@@ -85,7 +91,10 @@ pub struct Record {
     #[pyo3(get, set)]
     len: Option<usize>,
     molecule_type: Option<String>,
+
+    #[pyo3(get)]
     division: String,
+
     #[pyo3(get, set)]
     definition: Option<String>,
     #[pyo3(get, set)]
@@ -351,7 +360,7 @@ impl Record {
 
 impl Convert for gb_io::seq::Seq {
     type Output = Py<Record>;
-    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
         Py::new(
             py,
             Record {
@@ -414,57 +423,24 @@ impl Source {
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Clone)]
 pub struct Feature {
-    kind: gb_io::seq::FeatureKind,
+    #[pyo3(get, set)]
+    kind: Py<PyString>,
     #[pyo3(get, set)]
     qualifiers: Py<PyList>,
     #[pyo3(get, set)]
     location: PyObject,
 }
 
-// #[pymethods]
-// impl Feature {
-//     #[getter(r#type)]
-//     fn get_ty(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-//         let py = slf.py();
-//         let seq = slf.seq.read().expect("failed to read lock");
-//         if slf.index < seq.features.len() {
-//             let ty = seq.features[slf.index].kind.deref();
-//             Ok(PyString::new(py, ty).into_py(py))
-//         } else {
-//             Err(PyIndexError::new_err(slf.index))
-//         }
-//     }
-
-//     #[getter]
-//     fn get_qualifiers<'py>(slf: PyRef<'py, Self>) -> PyResult<Py<Qualifiers>> {
-//         Py::new(
-//             slf.py(),
-//             Qualifiers {
-//                 seq: slf.seq.clone(),
-//                 index: slf.index,
-//             },
-//         )
-//     }
-
-//     #[getter]
-//     fn get_location<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
-//         let py = slf.py();
-//         let seq = slf.seq.read().expect("failed to read lock");
-//         if slf.index < seq.features.len() {
-//             Location::convert(py, &seq.features[slf.index].location)
-//         } else {
-//             Err(PyIndexError::new_err(slf.index))
-//         }
-//     }
-// }
+#[pymethods]
+impl Feature {}
 
 impl Convert for gb_io::seq::Feature {
     type Output = Py<Feature>;
-    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
         Py::new(
             py,
             Feature {
-                kind: self.kind,
+                kind: interner.intern(py, self.kind),
                 location: self.location.convert_with(py, interner)?,
                 qualifiers: self.qualifiers.convert_with(py, interner)?,
             },
@@ -573,7 +549,7 @@ impl Qualifier {
 
 impl Convert for (QualifierKey, Option<String>) {
     type Output = Py<Qualifier>;
-    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
         Py::new(py, Qualifier::new(self.0, self.1))
     }
 }
@@ -626,7 +602,7 @@ pub struct Location;
 
 impl Convert for gb_io::seq::Location {
     type Output = PyObject;
-    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
                 let objects: PyObject = $inner
@@ -669,13 +645,17 @@ impl Convert for gb_io::seq::Location {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Range {
-    #[pyo3(get)]
+    #[pyo3(get, set)]
+    /// `int`: The start of the range of positions.
     start: i64,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
+    /// `int`: The end of the range of positions.
     end: i64,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
+    /// `bool`: Whether the range start before the given ``start`` index.
     before: bool,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
+    /// `bool`: Whether the range extends after the given ``end`` index.
     after: bool,
 }
 
@@ -931,6 +911,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<self::Order>()?;
     m.add_class::<self::Bond>()?;
     m.add_class::<self::OneOf>()?;
+    m.add_class::<self::External>()?;
     // m.add_class::<self::Qualifier>()?;
     // m.add_class::<self::Qualifiers>()?;
     m.add_class::<self::Feature>()?;
