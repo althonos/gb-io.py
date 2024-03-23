@@ -12,8 +12,8 @@ name = "gb_io_py"
 doctest = false
 
 [build-dependencies.built]
-version  = "0.5.1"
-features = ["chrono"]
+version  = "0.7.1"
+features = ["chrono", "cargo-lock"]
 
 [dependencies]
 libc = "0.2.62"
