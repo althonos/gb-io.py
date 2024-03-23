@@ -381,7 +381,7 @@ pub struct Feature {
 
 #[pymethods]
 impl Feature {
-    #[getter(type)]
+    #[getter(r#type)]
     fn get_ty(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
         let py = slf.py();
         let seq = slf.seq.read().expect("failed to read lock");
@@ -435,7 +435,7 @@ impl Qualifiers {
             if let Some(v) = value {
                 let l = dict
                     .call_method1("setdefault", (key.deref(), PyList::empty(slf.py())))?
-                    .cast_as::<PyList>()?;
+                    .downcast::<PyList>()?;
                 l.append(PyString::new(slf.py(), v))?;
             }
         }
@@ -564,7 +564,7 @@ impl From<&Range> for SeqLocation {
 #[pymethods]
 impl Range {
     #[new]
-    #[args(before = "false", after = "false")]
+    #[pyo3(signature = (start, end, before = false, after = false))]
     fn __new__(start: i64, end: i64, before: bool, after: bool) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Location).add_subclass(Self {
             start: start,
@@ -671,7 +671,7 @@ impl Join {
     fn get_start<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
         let py = slf.py();
         let mut min: Option<i32> = None;
-        for obj in slf.locations.cast_as::<PyList>(py)? {
+        for obj in slf.locations.downcast::<PyList>(py)? {
             let start = obj.getattr("start")?.extract::<i32>()?;
             min = match min {
                 Some(i) if i < start => Some(i),
@@ -687,7 +687,7 @@ impl Join {
     fn get_end<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
         let py = slf.py();
         let mut min: Option<i32> = None;
-        for obj in slf.locations.cast_as::<PyList>(py)? {
+        for obj in slf.locations.downcast::<PyList>(py)? {
             let end = obj.getattr("end")?.extract::<i32>()?;
             min = match min {
                 Some(i) if i > end => Some(i),
@@ -800,7 +800,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     fn load(py: Python, fh: &PyAny) -> PyResult<Py<PyList>> {
         // extract either a path or a file-handle from the arguments
         // let path: Option<String>;
-        let stream: Box<dyn Read> = if let Ok(s) = fh.cast_as::<PyString>() {
+        let stream: Box<dyn Read> = if let Ok(s) = fh.downcast::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::open(s.to_str()?) {
                 Ok(f) => f,
@@ -876,7 +876,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     #[pyo3(name = "iter", text_signature = "(fh)")]
     fn iter(py: Python, fh: &PyAny) -> PyResult<Py<RecordReader>> {
-        let reader = match fh.cast_as::<PyString>() {
+        let reader = match fh.downcast::<PyString>() {
             Ok(s) => RecordReader::from_path(s.to_str()?)?,
             Err(_) => RecordReader::from_handle(fh)?,
         };
@@ -898,9 +898,10 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     ///          so that the locus line is no longer than 79 characters.
     ///
     /// .. versionadded:: 0.2.0
-    #[pyfn(m, escape_locus = "false", truncate_locus = "false")]
+    #[pyfunction]
     #[pyo3(
         name = "dump",
+        signature = (records, fh, escape_locus = false, truncate_locus = false),
         text_signature = "(records, fh, *, escape_locus=False, truncate_locus=False)"
     )]
     fn dump(
@@ -911,7 +912,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         truncate_locus: bool,
     ) -> PyResult<()> {
         // extract either a path or a file-handle from the arguments
-        let stream: Box<dyn Write> = if let Ok(s) = fh.cast_as::<PyString>() {
+        let stream: Box<dyn Write> = if let Ok(s) = fh.downcast::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::create(s.to_str()?) {
                 Ok(f) => f,
@@ -949,9 +950,9 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
 
         // if a single record was given, wrap it in an iterable
         let it = if let Ok(record) = records.extract::<Py<Record>>() {
-            PyIterator::from_object(py, PyTuple::new(py, [record]))?
+            PyIterator::from_object(PyTuple::new(py, [record]))?
         } else {
-            PyIterator::from_object(py, records)?
+            PyIterator::from_object(records)?
         };
 
         // write sequences
