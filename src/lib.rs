@@ -7,6 +7,7 @@ mod built;
 mod iter;
 mod pyfile;
 
+use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
 use std::ops::Deref;
@@ -46,11 +47,26 @@ use self::pyfile::PyFileWrite;
 
 // ---------------------------------------------------------------------------
 
-pub struct PyInterner;
+#[derive(Debug, Default)]
+pub struct PyInterner {
+    cache: RwLock<HashMap<String, Py<PyString>>>,
+}
 
 impl PyInterner {
     pub fn intern<S: AsRef<str>>(&self, py: Python, s: S) -> Py<PyString> {
-        PyString::new(py, s.as_ref()).into()
+        let key = s.as_ref();
+        if let Some(pystring) = self
+            .cache
+            .read()
+            .expect("failed to acquired cache")
+            .get(key)
+        {
+            return pystring.clone();
+        }
+        let mut cache = self.cache.write().expect("failed to acquire cache");
+        let pystring = Py::from(PyString::new(py, key));
+        cache.insert(key.into(), pystring.clone());
+        pystring
     }
 }
 
@@ -58,7 +74,7 @@ pub trait Convert: Sized {
     type Output;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output>;
     fn convert(self, py: Python) -> PyResult<Self::Output> {
-        self.convert_with(py, &mut PyInterner)
+        self.convert_with(py, &mut PyInterner::default())
     }
 }
 
@@ -91,10 +107,8 @@ pub struct Record {
     #[pyo3(get, set)]
     len: Option<usize>,
     molecule_type: Option<String>,
-
     #[pyo3(get)]
     division: String,
-
     #[pyo3(get, set)]
     definition: Option<String>,
     #[pyo3(get, set)]
@@ -513,12 +527,14 @@ impl Convert for gb_io::seq::Feature {
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
-    key: QualifierKey,
+    #[pyo3(get, set)]
+    key: Py<PyString>,
+    #[pyo3(get, set)]
     value: Option<String>,
 }
 
 impl Qualifier {
-    pub fn new<S>(key: QualifierKey, value: S) -> Self
+    pub fn new<S>(key: Py<PyString>, value: S) -> Self
     where
         S: Into<Option<String>>,
     {
@@ -529,28 +545,10 @@ impl Qualifier {
     }
 }
 
-#[pymethods]
-impl Qualifier {
-    #[getter]
-    pub fn get_key<'py>(slf: PyRef<'py, Self>) -> PyObject {
-        let py = slf.py();
-        PyString::new(py, slf.deref().key.deref()).into_py(py)
-    }
-
-    #[getter]
-    pub fn get_value<'py>(slf: PyRef<'py, Self>) -> PyObject {
-        let py = slf.py();
-        match &slf.deref().value {
-            None => py.None(),
-            Some(s) => PyString::new(py, s.deref()).into_py(py),
-        }
-    }
-}
-
 impl Convert for (QualifierKey, Option<String>) {
     type Output = Py<Qualifier>;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
-        Py::new(py, Qualifier::new(self.0, self.1))
+        Py::new(py, Qualifier::new(interner.intern(py, self.0), self.1))
     }
 }
 
@@ -974,11 +972,12 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         let reader = SeqReader::new(stream);
 
         // parse all records
+        let mut interner = PyInterner::default();
         let records = PyList::empty(py);
         for result in reader {
             match result {
                 Ok(seq) => {
-                    records.append(Py::new(py, seq.convert(py)?)?)?;
+                    records.append(Py::new(py, seq.convert_with(py, &mut interner)?)?)?;
                 }
                 Err(GbParserError::Io(e)) => {
                     return match e.raw_os_error() {
