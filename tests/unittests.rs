@@ -23,52 +23,48 @@ macro_rules! unittest {
             // acquire Python only one test at a time
             let success = {
                 let _l = LOCK.lock().unwrap();
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-
-                // create a Python module from our rust code with debug symbols
-                let module = PyModule::new(py, "fastobo").unwrap();
-                gb_io_py::init(py, &module).unwrap();
-                py.import("sys")
-                    .unwrap()
-                    .getattr("modules")
-                    .unwrap()
-                    .downcast::<PyDict>()
-                    .unwrap()
-                    .set_item("gb_io", module)
-                    .unwrap();
-
-                // patch `sys.path` to locate tests from the project folder
-                py.import("sys")
-                    .unwrap()
-                    .getattr("path")
-                    .unwrap()
-                    .downcast::<PyList>()
-                    .unwrap()
-                    .insert(0, env!("CARGO_MANIFEST_DIR"))
-                    .unwrap();
-
-                // run tests with the unittest runner
-                let kwargs = PyDict::new(py);
-                kwargs.set_item("verbosity", 2).unwrap();
-                kwargs.set_item("exit", false).unwrap();
-                let prog = py
-                    .import("unittest")
-                    .unwrap()
-                    .call_method(
-                        "main",
-                        (concat!("tests.", stringify!($name)),),
-                        Some(kwargs),
-                    )
-                    .unwrap();
-
-                // check run was was successful
-                prog.getattr("result")
-                    .unwrap()
-                    .call_method0("wasSuccessful")
-                    .unwrap()
-                    .extract::<bool>()
-                    .unwrap()
+                Python::with_gil(|py| {
+                    // create a Python module from our rust code with debug symbols
+                    let module = PyModule::new(py, "fastobo").unwrap();
+                    gb_io_py::init(py, &module).unwrap();
+                    py.import("sys")
+                        .unwrap()
+                        .getattr("modules")
+                        .unwrap()
+                        .downcast::<PyDict>()
+                        .unwrap()
+                        .set_item("gb_io", module)
+                        .unwrap();
+                    // patch `sys.path` to locate tests from the project folder
+                    py.import("sys")
+                        .unwrap()
+                        .getattr("path")
+                        .unwrap()
+                        .downcast::<PyList>()
+                        .unwrap()
+                        .insert(0, env!("CARGO_MANIFEST_DIR"))
+                        .unwrap();
+                    // run tests with the unittest runner
+                    let kwargs = PyDict::new(py);
+                    kwargs.set_item("verbosity", 2).unwrap();
+                    kwargs.set_item("exit", false).unwrap();
+                    let prog = py
+                        .import("unittest")
+                        .unwrap()
+                        .call_method(
+                            "main",
+                            (concat!("tests.", stringify!($name)),),
+                            Some(kwargs),
+                        )
+                        .unwrap();
+                    // check run was was successful
+                    prog.getattr("result")
+                        .unwrap()
+                        .call_method0("wasSuccessful")
+                        .unwrap()
+                        .extract::<bool>()
+                        .unwrap()
+                })
             };
 
             // check the test succeeded
