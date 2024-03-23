@@ -12,6 +12,7 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 use super::pyfile::PyFileGILRead;
+use super::Convert;
 use super::Record;
 
 // ---------------------------------------------------------------------------
@@ -80,10 +81,10 @@ impl RecordReader {
         Ok(slf)
     }
 
-    fn __next__<'p>(mut slf: PyRefMut<'p, Self>) -> PyResult<Option<Record>> {
+    fn __next__<'p>(mut slf: PyRefMut<'p, Self>) -> PyResult<Option<Py<Record>>> {
         match slf.deref_mut().reader.next() {
             None => Ok(None),
-            Some(Ok(seq)) => Ok(Some(Record::from(seq))),
+            Some(Ok(seq)) => Python::with_gil(|py| Ok(Some(seq.convert(py)?))),
             Some(Err(e)) => {
                 Python::with_gil(|py| {
                     if PyErr::occurred(py) {

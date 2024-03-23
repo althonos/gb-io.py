@@ -28,6 +28,7 @@ use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyDate;
@@ -45,264 +46,336 @@ use self::pyfile::PyFileWrite;
 
 // ---------------------------------------------------------------------------
 
+pub struct Interner;
+
+pub trait Convert: Sized {
+    type Output;
+    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output>;
+    fn convert(self, py: Python) -> PyResult<Self::Output> {
+        self.convert_with(py, &mut Interner)
+    }
+}
+
+impl<T: Convert> Convert for Vec<T>
+where
+    T: Convert,
+    <T as Convert>::Output: ToPyObject,
+{
+    type Output = Py<PyList>;
+    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+        let l = PyList::empty(py);
+        for elem in self.into_iter() {
+            l.append(elem.convert_with(py, interner)?)?;
+        }
+        Ok(Py::from(l))
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 /// A single GenBank record.
 #[pyclass(module = "gb_io")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Record {
-    seq: Arc<RwLock<Seq>>,
+    // seq: Arc<RwLock<Seq>>,
+    #[pyo3(get, set)]
+    name: Option<String>,
+    topology: Topology,
+    // date: Option<Date>,
+    #[pyo3(get, set)]
+    len: Option<usize>,
+    molecule_type: Option<String>,
+    division: String,
+    #[pyo3(get, set)]
+    definition: Option<String>,
+    #[pyo3(get, set)]
+    accession: Option<String>,
+    #[pyo3(get, set)]
+    version: Option<String>,
+    // source: Option<Source>,
+    dblink: Option<String>,
+    keywords: Option<String>,
+    // references: Vec<Arc<Reference>>,
+    comments: Vec<String>,
+    sequence: Vec<u8>,
+    // contig: Option<Location>,
+    #[pyo3(get, set)]
+    features: Py<PyList>,
 }
 
 #[pymethods]
 impl Record {
-    /// Create a new record.
-    #[new]
-    #[pyo3(signature = (sequence, *, name = None, division = String::from("UNK"), circular = false, accession = None, version = None))]
-    fn __init__<'py>(
-        sequence: &'py PyAny,
-        name: Option<String>,
-        division: String,
-        circular: bool,
-        accession: Option<String>,
-        version: Option<String>,
-    ) -> PyResult<PyClassInitializer<Self>> {
-        let seq = if let Ok(sequence_str) = sequence.downcast::<PyString>() {
-            sequence_str.to_str()?.as_bytes().to_vec()
-        } else if let Ok(sequence_bytes) = sequence.downcast::<PyBytes>() {
-            sequence_bytes.as_bytes().to_vec()
-        } else {
-            return Err(PyTypeError::new_err("Expected str or bytes for `sequence`"));
-        };
+    // /// Create a new record.
+    // #[new]
+    // #[pyo3(signature = (sequence, *, name = None, division = String::from("UNK"), circular = false, accession = None, version = None))]
+    // fn __init__<'py>(
+    //     sequence: &'py PyAny,
+    //     name: Option<String>,
+    //     division: String,
+    //     circular: bool,
+    //     accession: Option<String>,
+    //     version: Option<String>,
+    // ) -> PyResult<PyClassInitializer<Self>> {
+    //     let seq = if let Ok(sequence_str) = sequence.downcast::<PyString>() {
+    //         sequence_str.to_str()?.as_bytes().to_vec()
+    //     } else if let Ok(sequence_bytes) = sequence.downcast::<PyBytes>() {
+    //         sequence_bytes.as_bytes().to_vec()
+    //     } else {
+    //         return Err(PyTypeError::new_err("Expected str or bytes for `sequence`"));
+    //     };
 
-        let topology = match circular {
-            true => Topology::Circular,
-            false => Topology::Linear,
-        };
+    //     let topology = match circular {
+    //         true => Topology::Circular,
+    //         false => Topology::Linear,
+    //     };
 
-        let record = Record::from(Seq {
-            name,
-            division,
-            seq,
-            topology,
-            contig: None,
-            features: Vec::new(),
-            comments: Vec::new(),
-            date: None,
-            len: None,
-            molecule_type: None,
-            definition: None,
-            accession,
-            version,
-            source: None,
-            dblink: None,
-            keywords: None,
-            references: Vec::new(),
-        });
-        Ok(record.into())
-    }
+    //     let record = Record::from(Seq {
+    //         name,
+    //         division,
+    //         seq,
+    //         topology,
+    //         contig: None,
+    //         features: Vec::new(),
+    //         comments: Vec::new(),
+    //         date: None,
+    //         len: None,
+    //         molecule_type: None,
+    //         definition: None,
+    //         accession,
+    //         version,
+    //         source: None,
+    //         dblink: None,
+    //         keywords: None,
+    //         references: Vec::new(),
+    //     });
+    //     Ok(record.into())
+    // }
 
-    /// `str`, optional: The name of the record, or `None`.
-    #[getter]
-    fn get_name(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.name {
-            None => Ok(slf.py().None()),
-            Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
-        }
-    }
+    // /// `str`, optional: The name of the record, or `None`.
+    // #[getter]
+    // fn get_name(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.name {
+    //         None => Ok(slf.py().None()),
+    //         Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
+    //     }
+    // }
 
-    #[setter]
-    fn set_name(slf: PyRefMut<'_, Self>, name: Option<String>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.name = name;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_name(slf: PyRefMut<'_, Self>, name: Option<String>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.name = name;
+    //     Ok(())
+    // }
 
-    /// `str`: The topology of the record.
-    #[getter]
-    fn get_topology(slf: PyRef<'_, Self>) -> PyResult<&str> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.topology {
-            Topology::Linear => Ok("linear"),
-            Topology::Circular => Ok("circular"),
-        }
-    }
+    // /// `str`: The topology of the record.
+    // #[getter]
+    // fn get_topology(slf: PyRef<'_, Self>) -> PyResult<&str> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.topology {
+    //         Topology::Linear => Ok("linear"),
+    //         Topology::Circular => Ok("circular"),
+    //     }
+    // }
 
-    #[setter]
-    fn set_topology(slf: PyRefMut<'_, Self>, topology: &str) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        match topology {
-            "linear" => {
-                seq.topology = Topology::Linear;
-                Ok(())
-            }
-            "circular" => {
-                seq.topology = Topology::Circular;
-                Ok(())
-            }
-            other => {
-                let message = format!("invalid topology: {:?}", other);
-                Err(PyValueError::new_err(message))
-            }
-        }
-    }
+    // #[setter]
+    // fn set_topology(slf: PyRefMut<'_, Self>, topology: &str) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     match topology {
+    //         "linear" => {
+    //             seq.topology = Topology::Linear;
+    //             Ok(())
+    //         }
+    //         "circular" => {
+    //             seq.topology = Topology::Circular;
+    //             Ok(())
+    //         }
+    //         other => {
+    //             let message = format!("invalid topology: {:?}", other);
+    //             Err(PyValueError::new_err(message))
+    //         }
+    //     }
+    // }
 
-    /// `str`, optional: The definition of the record, or `None`.
-    #[getter]
-    fn get_definition(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.definition {
-            None => Ok(slf.py().None()),
-            Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
-        }
-    }
+    // /// `str`, optional: The definition of the record, or `None`.
+    // #[getter]
+    // fn get_definition(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.definition {
+    //         None => Ok(slf.py().None()),
+    //         Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
+    //     }
+    // }
 
-    #[setter]
-    fn set_definition(slf: PyRefMut<'_, Self>, definition: Option<String>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.definition = definition;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_definition(slf: PyRefMut<'_, Self>, definition: Option<String>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.definition = definition;
+    //     Ok(())
+    // }
 
-    /// `str`, optional: The accession of the record, or `None`.
-    #[getter]
-    fn get_accession(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.accession {
-            None => Ok(slf.py().None()),
-            Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
-        }
-    }
+    // /// `str`, optional: The accession of the record, or `None`.
+    // #[getter]
+    // fn get_accession(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.accession {
+    //         None => Ok(slf.py().None()),
+    //         Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
+    //     }
+    // }
 
-    #[setter]
-    fn set_accession(slf: PyRefMut<'_, Self>, accession: Option<String>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.accession = accession;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_accession(slf: PyRefMut<'_, Self>, accession: Option<String>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.accession = accession;
+    //     Ok(())
+    // }
 
-    /// `str`, optional: The version of the record, or `None`.
-    #[getter]
-    fn get_version(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.version {
-            None => Ok(slf.py().None()),
-            Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
-        }
-    }
+    // /// `str`, optional: The version of the record, or `None`.
+    // #[getter]
+    // fn get_version(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.version {
+    //         None => Ok(slf.py().None()),
+    //         Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
+    //     }
+    // }
 
-    #[setter]
-    fn set_version(slf: PyRefMut<'_, Self>, version: Option<String>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.version = version;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_version(slf: PyRefMut<'_, Self>, version: Option<String>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.version = version;
+    //     Ok(())
+    // }
 
-    /// `str`, optional: The molecule type of the record, or `None`.
-    #[getter]
-    fn get_molecule_type(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.molecule_type {
-            None => Ok(slf.py().None()),
-            Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
-        }
-    }
+    // /// `str`, optional: The molecule type of the record, or `None`.
+    // #[getter]
+    // fn get_molecule_type(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.molecule_type {
+    //         None => Ok(slf.py().None()),
+    //         Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
+    //     }
+    // }
 
-    #[setter]
-    fn set_molecule_type(slf: PyRefMut<'_, Self>, molecule_type: Option<String>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.molecule_type = molecule_type;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_molecule_type(slf: PyRefMut<'_, Self>, molecule_type: Option<String>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.molecule_type = molecule_type;
+    //     Ok(())
+    // }
 
-    /// `str`: The division this record is stored under in GenBank.
-    #[getter]
-    fn get_division(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        Ok(PyString::new(slf.py(), &seq.division).into_py(slf.py()))
-    }
+    // /// `str`: The division this record is stored under in GenBank.
+    // #[getter]
+    // fn get_division(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     Ok(PyString::new(slf.py(), &seq.division).into_py(slf.py()))
+    // }
 
-    #[setter]
-    fn set_division(slf: PyRefMut<'_, Self>, division: String) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.division = division;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_division(slf: PyRefMut<'_, Self>, division: String) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.division = division;
+    //     Ok(())
+    // }
 
-    /// `str`, optional: Keywords related to the record, or `None`.
-    #[getter]
-    fn get_keywords(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.keywords {
-            None => Ok(slf.py().None()),
-            Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
-        }
-    }
+    // /// `str`, optional: Keywords related to the record, or `None`.
+    // #[getter]
+    // fn get_keywords(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.keywords {
+    //         None => Ok(slf.py().None()),
+    //         Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
+    //     }
+    // }
 
-    #[setter]
-    fn set_keywords(slf: PyRefMut<'_, Self>, keywords: Option<String>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        seq.keywords = keywords;
-        Ok(())
-    }
+    // #[setter]
+    // fn set_keywords(slf: PyRefMut<'_, Self>, keywords: Option<String>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     seq.keywords = keywords;
+    //     Ok(())
+    // }
 
-    /// `~datetime.date`, optional: The date this record was submitted, or `None`.
-    #[getter]
-    fn get_date(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let py = slf.py();
-        let seq = slf.seq.read().expect("cannot read lock");
-        match &seq.date {
-            None => Ok(py.None()),
-            Some(dt) => {
-                let date = PyDate::new(py, dt.year(), dt.month() as u8, dt.day() as u8)?;
-                Ok(date.into_py(py))
-            }
-        }
-    }
+    // /// `~datetime.date`, optional: The date this record was submitted, or `None`.
+    // #[getter]
+    // fn get_date(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+    //     let py = slf.py();
+    //     let seq = slf.seq.read().expect("cannot read lock");
+    //     match &seq.date {
+    //         None => Ok(py.None()),
+    //         Some(dt) => {
+    //             let date = PyDate::new(py, dt.year(), dt.month() as u8, dt.day() as u8)?;
+    //             Ok(date.into_py(py))
+    //         }
+    //     }
+    // }
 
-    #[setter]
-    fn set_date(slf: PyRefMut<'_, Self>, date: Option<&PyDate>) -> PyResult<()> {
-        let mut seq = slf.seq.write().expect("cannot write lock");
-        if let Some(dt) = date {
-            let year = dt.get_year();
-            let month = dt.get_month() as u32;
-            let day = dt.get_day() as u32;
-            if let Ok(date) = gb_io::seq::Date::from_ymd(year, month, day) {
-                seq.date = Some(date);
-            } else {
-                return Err(PyValueError::new_err("invalid date"));
-            }
-        } else {
-            seq.date = None;
-        }
-        Ok(())
-    }
+    // #[setter]
+    // fn set_date(slf: PyRefMut<'_, Self>, date: Option<&PyDate>) -> PyResult<()> {
+    //     let mut seq = slf.seq.write().expect("cannot write lock");
+    //     if let Some(dt) = date {
+    //         let year = dt.get_year();
+    //         let month = dt.get_month() as u32;
+    //         let day = dt.get_day() as u32;
+    //         if let Ok(date) = gb_io::seq::Date::from_ymd(year, month, day) {
+    //             seq.date = Some(date);
+    //         } else {
+    //             return Err(PyValueError::new_err("invalid date"));
+    //         }
+    //     } else {
+    //         seq.date = None;
+    //     }
+    //     Ok(())
+    // }
 
     /// `bytes`: The sequence of the record in lowercase, as raw ASCII.
     #[getter]
     fn get_sequence(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("failed to read lock");
-        Ok(PyBytes::new(slf.py(), &seq.seq).into())
+        // let seq = slf.seq.read().expect("failed to read lock");
+        Ok(PyBytes::new(slf.py(), &slf.sequence).into())
     }
 
-    /// `~gb_io.Features`: A collection of features within the record.
-    #[getter]
-    fn get_features(slf: PyRef<'_, Self>) -> PyResult<Py<Features>> {
-        Py::new(
-            slf.py(),
-            Features {
-                seq: slf.seq.clone(),
-            },
-        )
-    }
+    // /// `~gb_io.Features`: A collection of features within the record.
+    // #[getter]
+    // fn get_features(slf: PyRef<'_, Self>) -> PyResult<Py<Features>> {
+    //     Py::new(
+    //         slf.py(),
+    //         Features {
+    //             seq: slf.seq.clone(),
+    //         },
+    //     )
+    // }
 
     // TODO: len, source, dblink, references, comments, contig,
 }
 
-impl From<Seq> for Record {
-    fn from(seq: Seq) -> Self {
-        Self {
-            seq: Arc::new(RwLock::new(seq)),
-        }
+impl Convert for gb_io::seq::Seq {
+    type Output = Py<Record>;
+    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+        Py::new(
+            py,
+            Record {
+                name: self.name,
+                topology: self.topology,
+                len: self.len,
+                molecule_type: self.molecule_type,
+                division: self.division,
+                definition: self.definition,
+                accession: self.accession,
+                version: self.version,
+                dblink: self.dblink,
+                keywords: self.keywords,
+                comments: self.comments,
+                sequence: self.seq,
+                features: self.features.convert_with(py, interner)?,
+            },
+        )
+    }
+}
+
+impl From<Record> for gb_io::seq::Seq {
+    fn from(record: Record) -> Self {
+        unimplemented!()
     }
 }
 
@@ -338,145 +411,146 @@ impl Source {
 
 // ---------------------------------------------------------------------------
 
-/// A collection of features in a single record.
 #[pyclass(module = "gb_io")]
-#[derive(Debug)]
-pub struct Features {
-    seq: Arc<RwLock<Seq>>,
-}
-
-#[pymethods]
-impl Features {
-    fn __len__(slf: PyRef<'_, Self>) -> PyResult<usize> {
-        let seq = slf.seq.read().expect("failed to read lock");
-        Ok(seq.features.len())
-    }
-
-    fn __getitem__(slf: PyRef<'_, Self>, mut item: isize) -> PyResult<Py<Feature>> {
-        let seq = slf.seq.read().expect("failed to read lock");
-        let length = seq.features.len();
-        if item < 0 {
-            item += length as isize;
-        }
-        if item < 0 || item >= length as isize {
-            Err(PyIndexError::new_err(item))
-        } else {
-            Py::new(
-                slf.py(),
-                Feature {
-                    seq: slf.seq.clone(),
-                    index: item as usize,
-                },
-            )
-        }
-    }
-}
-
-#[pyclass(module = "gb_io")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Feature {
-    seq: Arc<RwLock<Seq>>,
-    index: usize,
+    kind: gb_io::seq::FeatureKind,
+    #[pyo3(get, set)]
+    qualifiers: Py<PyList>,
+    #[pyo3(get, set)]
+    location: PyObject,
 }
 
-#[pymethods]
-impl Feature {
-    #[getter(r#type)]
-    fn get_ty(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let py = slf.py();
-        let seq = slf.seq.read().expect("failed to read lock");
-        if slf.index < seq.features.len() {
-            let ty = seq.features[slf.index].kind.deref();
-            Ok(PyString::new(py, ty).into_py(py))
-        } else {
-            Err(PyIndexError::new_err(slf.index))
-        }
-    }
+// #[pymethods]
+// impl Feature {
+//     #[getter(r#type)]
+//     fn get_ty(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+//         let py = slf.py();
+//         let seq = slf.seq.read().expect("failed to read lock");
+//         if slf.index < seq.features.len() {
+//             let ty = seq.features[slf.index].kind.deref();
+//             Ok(PyString::new(py, ty).into_py(py))
+//         } else {
+//             Err(PyIndexError::new_err(slf.index))
+//         }
+//     }
 
-    #[getter]
-    fn get_qualifiers<'py>(slf: PyRef<'py, Self>) -> PyResult<Py<Qualifiers>> {
+//     #[getter]
+//     fn get_qualifiers<'py>(slf: PyRef<'py, Self>) -> PyResult<Py<Qualifiers>> {
+//         Py::new(
+//             slf.py(),
+//             Qualifiers {
+//                 seq: slf.seq.clone(),
+//                 index: slf.index,
+//             },
+//         )
+//     }
+
+//     #[getter]
+//     fn get_location<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+//         let py = slf.py();
+//         let seq = slf.seq.read().expect("failed to read lock");
+//         if slf.index < seq.features.len() {
+//             Location::convert(py, &seq.features[slf.index].location)
+//         } else {
+//             Err(PyIndexError::new_err(slf.index))
+//         }
+//     }
+// }
+
+impl Convert for gb_io::seq::Feature {
+    type Output = Py<Feature>;
+    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
         Py::new(
-            slf.py(),
-            Qualifiers {
-                seq: slf.seq.clone(),
-                index: slf.index,
+            py,
+            Feature {
+                kind: self.kind,
+                location: self.location.convert_with(py, interner)?,
+                qualifiers: self.qualifiers.convert_with(py, interner)?,
             },
         )
     }
-
-    #[getter]
-    fn get_location<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
-        let py = slf.py();
-        let seq = slf.seq.read().expect("failed to read lock");
-        if slf.index < seq.features.len() {
-            Location::convert(py, &seq.features[slf.index].location)
-        } else {
-            Err(PyIndexError::new_err(slf.index))
-        }
-    }
 }
 
-#[pyclass(module = "gb_io")]
-#[derive(Debug)]
-pub struct Qualifiers {
-    seq: Arc<RwLock<Seq>>,
-    index: usize,
-}
+// impl From<gb_io::seq::Feature> for Feature {
+//     fn from(feature: gb_io::seq::Feature) -> Self {
 
-#[pymethods]
-impl Qualifiers {
-    /// Group the qualifiers by key into a dictionary.
-    fn to_dict(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        let seq = slf.seq.read().expect("failed to read lock");
-        let feature = &seq.features[slf.index];
+//     }
+// }
 
-        let dict = PyDict::new(slf.py());
-        for (key, value) in feature.qualifiers.iter() {
-            if let Some(v) = value {
-                let l = dict
-                    .call_method1("setdefault", (key.deref(), PyList::empty(slf.py())))?
-                    .downcast::<PyList>()?;
-                l.append(PyString::new(slf.py(), v))?;
-            }
-        }
+// #[pyclass(module = "gb_io")]
+// #[derive(Debug)]
+// pub struct Qualifiers {
+//     key: gb_io::QualifierKey,
+//     value: Option<String>,
+// }
 
-        Ok(dict.into_py(slf.py()))
-    }
+// #[pymethods]
+// impl Qualifiers {
+//     /// Group the qualifiers by key into a dictionary.
+//     fn to_dict(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
+//         let seq = slf.seq.read().expect("failed to read lock");
+//         let feature = &seq.features[slf.index];
 
-    fn __len__(slf: PyRef<'_, Self>) -> PyResult<usize> {
-        let seq = slf.seq.read().expect("failed to read lock");
-        let feature = &seq.features[slf.index];
-        Ok(feature.qualifiers.len())
-    }
+//         let dict = PyDict::new(slf.py());
+//         for (key, value) in feature.qualifiers.iter() {
+//             if let Some(v) = value {
+//                 let l = dict
+//                     .call_method1("setdefault", (key.deref(), PyList::empty(slf.py())))?
+//                     .downcast::<PyList>()?;
+//                 l.append(PyString::new(slf.py(), v))?;
+//             }
+//         }
 
-    fn __getitem__(slf: PyRef<'_, Self>, mut item: isize) -> PyResult<Py<Qualifier>> {
-        let seq = slf.seq.read().expect("failed to read lock");
-        let feature = &seq.features[slf.index];
+//         Ok(dict.into_py(slf.py()))
+//     }
 
-        let length = feature.qualifiers.len();
-        if item < 0 {
-            item += length as isize;
-        }
-        if item < 0 || item >= length as isize {
-            Err(PyIndexError::new_err(item))
-        } else {
-            let qualifier = &feature.qualifiers[item as usize];
-            Py::new(
-                slf.py(),
-                Qualifier {
-                    key: qualifier.0.clone(),
-                    value: qualifier.1.clone(),
-                },
-            )
-        }
-    }
-}
+//     fn __len__(slf: PyRef<'_, Self>) -> PyResult<usize> {
+//         let seq = slf.seq.read().expect("failed to read lock");
+//         let feature = &seq.features[slf.index];
+//         Ok(feature.qualifiers.len())
+//     }
+
+//     fn __getitem__(slf: PyRef<'_, Self>, mut item: isize) -> PyResult<Py<Qualifier>> {
+//         let seq = slf.seq.read().expect("failed to read lock");
+//         let feature = &seq.features[slf.index];
+
+//         let length = feature.qualifiers.len();
+//         if item < 0 {
+//             item += length as isize;
+//         }
+//         if item < 0 || item >= length as isize {
+//             Err(PyIndexError::new_err(item))
+//         } else {
+//             let qualifier = &feature.qualifiers[item as usize];
+//             Py::new(
+//                 slf.py(),
+//                 Qualifier {
+//                     key: qualifier.0.clone(),
+//                     value: qualifier.1.clone(),
+//                 },
+//             )
+//         }
+//     }
+// }
 
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
     key: QualifierKey,
     value: Option<String>,
+}
+
+impl Qualifier {
+    pub fn new<S>(key: QualifierKey, value: S) -> Self
+    where
+        S: Into<Option<String>>,
+    {
+        Self {
+            key,
+            value: value.into(),
+        }
+    }
 }
 
 #[pymethods]
@@ -497,19 +571,67 @@ impl Qualifier {
     }
 }
 
+impl Convert for (QualifierKey, Option<String>) {
+    type Output = Py<Qualifier>;
+    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
+        Py::new(py, Qualifier::new(self.0, self.1))
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 #[pyclass(module = "gb_io", subclass)]
 #[derive(Debug)]
 pub struct Location;
 
-impl Location {
-    fn convert(py: Python<'_>, location: &SeqLocation) -> PyResult<PyObject> {
+// impl Location {
+//     fn convert(py: Python<'_>, location: &SeqLocation) -> PyResult<PyObject> {
+//         macro_rules! convert_vec {
+//             ($ty:ident, $inner:expr) => {{
+//                 let objects: PyObject = $inner
+//                     .iter()
+//                     .map(|loc| Location::convert(py, loc))
+//                     .collect::<PyResult<Vec<PyObject>>>()
+//                     .map(|objects| PyList::new(py, objects))
+//                     .map(|list| list.to_object(py))?;
+//                 Py::new(py, Join::__new__(objects)).map(|x| x.to_object(py))
+//             }};
+//         }
+
+//         match location {
+//             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
+//                 Py::new(py, Range::__new__(*start, *end, *before, *after)).map(|x| x.to_object(py))
+//             }
+//             SeqLocation::Between(start, end) => {
+//                 Py::new(py, Between::__new__(*start, *end)).map(|x| x.to_object(py))
+//             }
+//             SeqLocation::Complement(inner_location) => Location::convert(py, inner_location)
+//                 .and_then(|inner| Py::new(py, Complement::__new__(inner)))
+//                 .map(|x| x.to_object(py)),
+//             SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
+//             SeqLocation::Order(inner_locations) => convert_vec!(Order, inner_locations),
+//             SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
+//             SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
+//             SeqLocation::External(accession, location) => {
+//                 let loc = location.clone().map(|x| Location::convert(py, &x)).transpose()?;
+//                 Py::new(py, External::__new__(accession.clone(), loc)).map(|x| x.to_object(py))
+//             }
+//             _ => Err(PyNotImplementedError::new_err(format!(
+//                 "conversion of {:?}",
+//                 location
+//             ))),
+//         }
+//     }
+// }
+
+impl Convert for gb_io::seq::Location {
+    type Output = PyObject;
+    fn convert_with(self, py: Python, interner: &mut Interner) -> PyResult<Self::Output> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
                 let objects: PyObject = $inner
-                    .iter()
-                    .map(|loc| Location::convert(py, loc))
+                    .into_iter()
+                    .map(|loc| loc.convert_with(py, interner))
                     .collect::<PyResult<Vec<PyObject>>>()
                     .map(|objects| PyList::new(py, objects))
                     .map(|list| list.to_object(py))?;
@@ -517,23 +639,28 @@ impl Location {
             }};
         }
 
-        match location {
+        match self {
             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
-                Py::new(py, Range::__new__(*start, *end, *before, *after)).map(|x| x.to_object(py))
+                Py::new(py, Range::__new__(start, end, before, after)).map(|x| x.to_object(py))
             }
             SeqLocation::Between(start, end) => {
-                Py::new(py, Between::__new__(*start, *end)).map(|x| x.to_object(py))
+                Py::new(py, Between::__new__(start, end)).map(|x| x.to_object(py))
             }
-            SeqLocation::Complement(inner_location) => Location::convert(py, inner_location)
+            SeqLocation::Complement(inner_location) => (*inner_location)
+                .convert_with(py, interner)
                 .and_then(|inner| Py::new(py, Complement::__new__(inner)))
                 .map(|x| x.to_object(py)),
             SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
             SeqLocation::Order(inner_locations) => convert_vec!(Order, inner_locations),
             SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
             SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
+            SeqLocation::External(accession, location) => {
+                let loc = location.map(|x| x.convert_with(py, interner)).transpose()?;
+                Py::new(py, External::__new__(accession, loc)).map(|x| x.to_object(py))
+            }
             _ => Err(PyNotImplementedError::new_err(format!(
                 "conversion of {:?}",
-                location
+                self
             ))),
         }
     }
@@ -760,6 +887,35 @@ impl OneOf {
     }
 }
 
+#[pyclass(module = "gb_io", extends = Location)]
+#[derive(Debug)]
+pub struct External {
+    accession: String,
+    location: Option<PyObject>,
+}
+
+#[pymethods]
+impl External {
+    #[new]
+    fn __new__(accession: String, location: Option<PyObject>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self {
+            accession,
+            location,
+        })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let s = match &slf.location {
+            Some(s) => {
+                PyString::new(py, "External({}, {})").call_method1("format", (&slf.accession, s))?
+            }
+            None => PyString::new(py, "External({})").call_method1("format", (&slf.accession,))?,
+        };
+        Ok(s.to_object(py))
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 /// A fast GenBank I/O library based on the ``gb-io`` Rust crate.
@@ -775,10 +931,10 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<self::Order>()?;
     m.add_class::<self::Bond>()?;
     m.add_class::<self::OneOf>()?;
-    m.add_class::<self::Qualifier>()?;
-    m.add_class::<self::Qualifiers>()?;
+    // m.add_class::<self::Qualifier>()?;
+    // m.add_class::<self::Qualifiers>()?;
     m.add_class::<self::Feature>()?;
-    m.add_class::<self::Features>()?;
+    // m.add_class::<self::Features>()?;
     m.add_class::<self::Record>()?;
     m.add_class::<self::RecordReader>()?;
     m.add("__package__", "gb_io")?;
@@ -841,7 +997,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         for result in reader {
             match result {
                 Ok(seq) => {
-                    records.append(Py::new(py, Record::from(seq))?)?;
+                    records.append(Py::new(py, seq.convert(py)?)?)?;
                 }
                 Err(GbParserError::Io(e)) => {
                     return match e.raw_os_error() {
@@ -962,7 +1118,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
             let cell = record.as_ref(py);
             let cellref = cell.borrow();
             // get the seq object
-            let seq = cellref.seq.read().expect("cannot read lock");
+            let seq = (*cellref).clone().into();
             // write the seq
             writer.write(&seq).map_err(|err| match err.raw_os_error() {
                 Some(code) => PyIOError::new_err((code, err.to_string())),
