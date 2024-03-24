@@ -23,7 +23,6 @@ use gb_io::seq::Location as SeqLocation;
 use gb_io::seq::Seq;
 use gb_io::seq::Topology;
 use gb_io::writer::SeqWriter;
-use gb_io::QualifierKey;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyIndexError;
 use pyo3::exceptions::PyNotImplementedError;
@@ -100,7 +99,6 @@ where
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Clone)]
 pub struct Record {
-    // seq: Arc<RwLock<Seq>>,
     #[pyo3(get, set)]
     name: Option<String>,
     topology: Topology,
@@ -445,13 +443,26 @@ pub struct Feature {
     #[pyo3(get, set)]
     kind: Py<PyString>,
     #[pyo3(get, set)]
-    qualifiers: Py<PyList>,
-    #[pyo3(get, set)]
     location: PyObject,
+    qualifiers: Qualifiers,
 }
 
 #[pymethods]
-impl Feature {}
+impl Feature {
+    #[getter]
+    fn get_qualifiers<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyList>> {
+        let py = slf.py();
+        if let Qualifiers::Py(pylist) = &slf.deref().qualifiers {
+            return Ok(pylist.clone_ref(py));
+        }
+        let pylist = match &mut slf.deref_mut().qualifiers {
+            Qualifiers::Py(_) => unreachable!(),
+            Qualifiers::Vec(v) => std::mem::take(v).convert(py)?,
+        };
+        slf.deref_mut().qualifiers = Qualifiers::Py(pylist.clone_ref(py));
+        Ok(pylist)
+    }
+}
 
 impl Convert for gb_io::seq::Feature {
     type Output = Py<Feature>;
@@ -461,7 +472,7 @@ impl Convert for gb_io::seq::Feature {
             Feature {
                 kind: interner.intern(py, self.kind),
                 location: self.location.convert_with(py, interner)?,
-                qualifiers: self.qualifiers.convert_with(py, interner)?,
+                qualifiers: self.qualifiers.into(),
             },
         )
     }
@@ -484,28 +495,84 @@ impl Default for Features {
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
-    #[pyo3(get, set)]
-    key: Py<PyString>,
+    key: QualifierKey,
     #[pyo3(get, set)]
     value: Option<String>,
 }
 
 impl Qualifier {
-    pub fn new<S>(key: Py<PyString>, value: S) -> Self
+    pub fn new<K, V>(key: K, value: V) -> Self
     where
-        S: Into<Option<String>>,
+        K: Into<QualifierKey>,
+        V: Into<Option<String>>,
     {
         Self {
-            key,
+            key: key.into(),
             value: value.into(),
         }
     }
 }
 
-impl Convert for (QualifierKey, Option<String>) {
+#[pymethods]
+impl Qualifier {
+    #[getter]
+    fn get_key<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
+        let py = slf.py();
+        let pystring = match &slf.deref().key {
+            QualifierKey::Py(pystring) => return Ok(pystring.clone_ref(py)),
+            QualifierKey::Atom(atom) => Py::from(PyString::new(py, atom.as_ref())),
+        };
+        slf.deref_mut().key = QualifierKey::Py(pystring.clone_ref(py));
+        Ok(pystring)
+    }
+}
+
+impl Convert for (gb_io::QualifierKey, Option<String>) {
     type Output = Py<Qualifier>;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
-        Py::new(py, Qualifier::new(interner.intern(py, self.0), self.1))
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Self::Output> {
+        Py::new(py, Qualifier::new(self.0, self.1))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum QualifierKey {
+    Atom(gb_io::QualifierKey),
+    Py(Py<PyString>),
+}
+
+impl From<gb_io::QualifierKey> for QualifierKey {
+    fn from(key: gb_io::QualifierKey) -> Self {
+        QualifierKey::Atom(key)
+    }
+}
+
+impl From<Py<PyString>> for QualifierKey {
+    fn from(key: Py<PyString>) -> Self {
+        QualifierKey::Py(key)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Qualifiers {
+    Vec(Vec<(gb_io::QualifierKey, Option<String>)>),
+    Py(Py<PyList>),
+}
+
+impl Default for Qualifiers {
+    fn default() -> Self {
+        Qualifiers::Vec(Vec::new())
+    }
+}
+
+impl From<Vec<(gb_io::QualifierKey, Option<String>)>> for Qualifiers {
+    fn from(value: Vec<(gb_io::QualifierKey, Option<String>)>) -> Self {
+        Qualifiers::Vec(value)
+    }
+}
+
+impl From<Py<PyList>> for Qualifiers {
+    fn from(value: Py<PyList>) -> Self {
+        Qualifiers::Py(value)
     }
 }
 
