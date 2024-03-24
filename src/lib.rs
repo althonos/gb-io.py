@@ -7,6 +7,7 @@ mod built;
 mod iter;
 mod pyfile;
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
@@ -48,7 +49,7 @@ use self::pyfile::PyFileWrite;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Default)]
-pub struct PyInterner {
+struct PyInterner {
     cache: RwLock<HashMap<String, Py<PyString>>>,
 }
 
@@ -71,7 +72,7 @@ impl PyInterner {
 }
 
 /// A trait for types that can be converted to an equivalent Python type.
-pub trait Convert: Sized {
+trait Convert: Sized {
     type Output;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>>;
     fn convert(self, py: Python) -> PyResult<Py<Self::Output>> {
@@ -94,24 +95,55 @@ where
 }
 
 /// A trait for types that can be extracted from an equivalent Python type.
-pub trait Extract: Convert {
+trait Extract: Convert {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self>;
 }
 
 // ---------------------------------------------------------------------------
 
+/// A trait for obtaining a temporary value from a type.
+trait Temporary: Sized {
+    fn temporary() -> Self;
+}
+
+impl Temporary for gb_io::QualifierKey {
+    fn temporary() -> Self {
+        gb_io::QualifierKey::from("gene")
+    }
+}
+
+impl Temporary for gb_io::FeatureKind {
+    fn temporary() -> Self {
+        gb_io::FeatureKind::from("locus_tag")
+    }
+}
+
+impl Temporary for gb_io::seq::Location {
+    fn temporary() -> Self {
+        gb_io::seq::Location::Between(0, 1)
+    }
+}
+
+impl<T> Temporary for Vec<T> {
+    fn temporary() -> Self {
+        Vec::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone)]
-pub enum Coa<T: Convert> {
+enum Coa<T: Convert> {
     Owned(T),
     Shared(Py<<T as Convert>::Output>),
 }
 
-impl<T: Convert + Default> Coa<T> {
+impl<T: Convert + Temporary> Coa<T> {
     fn to_shared(&mut self, py: Python) -> PyResult<Py<<T as Convert>::Output>> {
         match self {
             Coa::Shared(pyref) => return Ok(pyref.clone_ref(py)),
             Coa::Owned(value) => {
-                let pyref = std::mem::take(value).convert(py)?;
+                let pyref = std::mem::replace(value, Temporary::temporary()).convert(py)?;
                 *self = Coa::Shared(pyref.clone_ref(py));
                 Ok(pyref)
             }
@@ -486,10 +518,24 @@ impl Convert for gb_io::seq::Source {
     }
 }
 
+// ---------------------------------------------------------------------------
+
 impl Convert for gb_io::seq::Date {
     type Output = PyDate;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Ok(PyDate::new(py, self.year() as i32, self.month() as u8, self.day() as u8)?.into())
+    }
+}
+
+impl Extract for gb_io::seq::Date {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let date = object.extract::<&PyDate>(py)?;
+        Self::from_ymd(
+            date.get_year(),
+            date.get_month() as u32,
+            date.get_day() as u32,
+        )
+        .map_err(|_| PyValueError::new_err("invalid date"))
     }
 }
 
@@ -498,15 +544,25 @@ impl Convert for gb_io::seq::Date {
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Clone)]
 pub struct Feature {
-    #[pyo3(get, set)]
-    kind: Py<PyString>,
-    #[pyo3(get, set)]
-    location: PyObject,
+    kind: Coa<gb_io::seq::FeatureKind>,
+    location: Coa<gb_io::seq::Location>,
     qualifiers: Coa<Vec<(gb_io::QualifierKey, Option<String>)>>,
 }
 
 #[pymethods]
 impl Feature {
+    #[getter]
+    fn get_kind<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
+        let py = slf.py();
+        slf.kind.to_shared(py)
+    }
+
+    #[getter]
+    fn get_location<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        slf.location.to_shared(py)
+    }
+
     #[getter]
     fn get_qualifiers<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyList>> {
         let py = slf.py();
@@ -520,11 +576,18 @@ impl Convert for gb_io::seq::Feature {
         Py::new(
             py,
             Feature {
-                kind: interner.intern(py, self.kind),
-                location: self.location.convert_with(py, interner)?,
+                kind: self.kind.into(),
+                location: self.location.into(),
                 qualifiers: self.qualifiers.into(),
             },
         )
+    }
+}
+
+impl Convert for gb_io::seq::FeatureKind {
+    type Output = PyString;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Ok(interner.intern(py, self.as_ref()))
     }
 }
 
@@ -551,6 +614,13 @@ impl Convert for gb_io::QualifierKey {
     type Output = PyString;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Ok(interner.intern(py, self))
+    }
+}
+
+impl Extract for gb_io::QualifierKey {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let s = object.extract::<&PyString>(py)?.to_str()?;
+        Ok(gb_io::QualifierKey::from(s))
     }
 }
 
