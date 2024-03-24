@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
 use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -85,11 +86,11 @@ where
 {
     type Output = Py<PyList>;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
-        let l = PyList::empty(py);
-        for elem in self.into_iter() {
-            l.append(elem.convert_with(py, interner)?)?;
-        }
-        Ok(Py::from(l))
+        let converted = self
+            .into_iter()
+            .map(|elem| elem.convert_with(py, interner))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Py::from(PyList::new(py, converted)))
     }
 }
 
@@ -122,8 +123,7 @@ pub struct Record {
     comments: Vec<String>,
     sequence: Vec<u8>,
     // contig: Option<Location>,
-    #[pyo3(get, set)]
-    features: Py<PyList>,
+    features: Features,
 }
 
 #[pymethods]
@@ -358,16 +358,21 @@ impl Record {
         Ok(PyBytes::new(slf.py(), &slf.sequence).into())
     }
 
-    // /// `~gb_io.Features`: A collection of features within the record.
-    // #[getter]
-    // fn get_features(slf: PyRef<'_, Self>) -> PyResult<Py<Features>> {
-    //     Py::new(
-    //         slf.py(),
-    //         Features {
-    //             seq: slf.seq.clone(),
-    //         },
-    //     )
-    // }
+    /// `list`: A list of `Feature` within the record.
+    #[getter]
+    fn get_features(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyList>> {
+        let py = slf.py();
+        let features = std::mem::take(&mut slf.deref_mut().features);
+        let list = match features {
+            Features::Py(l) => l.clone_ref(py),
+            Features::Vec(v) => {
+                let l = v.convert(py)?;
+                slf.deref_mut().features = Features::Py(l.clone_ref(py));
+                l
+            }
+        };
+        Ok(list)
+    }
 
     // TODO: len, source, dblink, references, comments, contig,
 }
@@ -390,7 +395,7 @@ impl Convert for gb_io::seq::Seq {
                 keywords: self.keywords,
                 comments: self.comments,
                 sequence: self.seq,
-                features: self.features.convert_with(py, interner)?,
+                features: Features::Vec(self.features),
             },
         )
     }
@@ -461,6 +466,20 @@ impl Convert for gb_io::seq::Feature {
         )
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum Features {
+    Vec(Vec<gb_io::seq::Feature>),
+    Py(Py<PyList>),
+}
+
+impl Default for Features {
+    fn default() -> Self {
+        Features::Vec(Vec::new())
+    }
+}
+
+// ---------------------------------------------------------------------------
 
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
