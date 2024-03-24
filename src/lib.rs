@@ -736,7 +736,9 @@ impl Convert for gb_io::seq::Location {
                     .collect::<PyResult<Vec<PyObject>>>()
                     .map(|objects| PyList::new(py, objects))
                     .map(|list| list.to_object(py))?;
-                Py::new(py, Join::__new__(objects)).map(|x| x.to_object(py))
+                Join::__new__(py, objects)
+                    .and_then(|x| Py::new(py, x))
+                    .map(|x| x.to_object(py))
             }};
         }
 
@@ -914,14 +916,22 @@ impl Complement {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Join {
-    locations: PyObject,
+    locations: Py<PyList>,
 }
 
 #[pymethods]
 impl Join {
     #[new]
-    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+        let list = PyList::empty(py);
+        for result in locations.as_ref(py).iter()? {
+            let object = result?;
+            object.downcast::<PyCell<Location>>()?;
+            list.append(object)?;
+        }
+        Ok(PyClassInitializer::from(Location).add_subclass(Self {
+            locations: Py::from(list),
+        }))
     }
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
@@ -934,7 +944,7 @@ impl Join {
     fn get_start<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
         let py = slf.py();
         let mut min: Option<i32> = None;
-        for obj in slf.locations.downcast::<PyList>(py)? {
+        for obj in slf.locations.as_ref(py) {
             let start = obj.getattr("start")?.extract::<i32>()?;
             min = match min {
                 Some(i) if i < start => Some(i),
@@ -950,7 +960,7 @@ impl Join {
     fn get_end<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
         let py = slf.py();
         let mut min: Option<i32> = None;
-        for obj in slf.locations.downcast::<PyList>(py)? {
+        for obj in slf.locations.as_ref(py) {
             let end = obj.getattr("end")?.extract::<i32>()?;
             min = match min {
                 Some(i) if i > end => Some(i),
@@ -966,14 +976,22 @@ impl Join {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Order {
-    locations: PyObject,
+    locations: Py<PyList>,
 }
 
 #[pymethods]
 impl Order {
     #[new]
-    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+        let list = PyList::empty(py);
+        for result in locations.as_ref(py).iter()? {
+            let object = result?;
+            object.downcast::<PyCell<Location>>()?;
+            list.append(object)?;
+        }
+        Ok(PyClassInitializer::from(Location).add_subclass(Self {
+            locations: Py::from(list),
+        }))
     }
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
@@ -986,14 +1004,22 @@ impl Order {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Bond {
-    locations: PyObject,
+    locations: Py<PyList>,
 }
 
 #[pymethods]
 impl Bond {
     #[new]
-    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+        let list = PyList::empty(py);
+        for result in locations.as_ref(py).iter()? {
+            let object = result?;
+            object.downcast::<PyCell<Location>>()?;
+            list.append(object)?;
+        }
+        Ok(PyClassInitializer::from(Location).add_subclass(Self {
+            locations: Py::from(list),
+        }))
     }
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
@@ -1006,14 +1032,22 @@ impl Bond {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct OneOf {
-    locations: PyObject,
+    locations: Py<PyList>,
 }
 
 #[pymethods]
 impl OneOf {
     #[new]
-    fn __new__(locations: PyObject) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Location).add_subclass(Self { locations })
+    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+        let list = PyList::empty(py);
+        for result in locations.as_ref(py).iter()? {
+            let object = result?;
+            object.downcast::<PyCell<Location>>()?;
+            list.append(object)?;
+        }
+        Ok(PyClassInitializer::from(Location).add_subclass(Self {
+            locations: Py::from(list),
+        }))
     }
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
