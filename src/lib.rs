@@ -291,30 +291,21 @@ impl Record {
     //     Ok(record.into())
     // }
 
-    /// `str`: The topology of the record, either *linear* or *circular*.
+    /// `bool`: Whether the record described a circular molecule.
     #[getter]
-    fn get_topology(slf: PyRef<'_, Self>) -> PyResult<&str> {
+    fn get_circular(slf: PyRef<'_, Self>) -> bool {
         match &slf.topology {
-            Topology::Linear => Ok("linear"),
-            Topology::Circular => Ok("circular"),
+            Topology::Linear => false,
+            Topology::Circular => true,
         }
     }
 
     #[setter]
-    fn set_topology(mut slf: PyRefMut<'_, Self>, topology: &str) -> PyResult<()> {
-        match topology {
-            "linear" => {
-                slf.topology = Topology::Linear;
-                Ok(())
-            }
-            "circular" => {
-                slf.topology = Topology::Circular;
-                Ok(())
-            }
-            other => {
-                let message = format!("invalid topology: {:?}", other);
-                Err(PyValueError::new_err(message))
-            }
+    fn set_circular(mut slf: PyRefMut<'_, Self>, circular: bool) {
+        if circular {
+            slf.topology = Topology::Circular;
+        } else {
+            slf.topology = Topology::Linear;
         }
     }
 
