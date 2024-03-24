@@ -70,10 +70,11 @@ impl PyInterner {
     }
 }
 
+/// A trait for types that can be converted to an equivalent Python type.
 pub trait Convert: Sized {
     type Output;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output>;
-    fn convert(self, py: Python) -> PyResult<Self::Output> {
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>>;
+    fn convert(self, py: Python) -> PyResult<Py<Self::Output>> {
         self.convert_with(py, &mut PyInterner::default())
     }
 }
@@ -81,15 +82,47 @@ pub trait Convert: Sized {
 impl<T: Convert> Convert for Vec<T>
 where
     T: Convert,
-    <T as Convert>::Output: ToPyObject,
 {
-    type Output = Py<PyList>;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
+    type Output = PyList;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         let converted = self
             .into_iter()
             .map(|elem| elem.convert_with(py, interner))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Py::from(PyList::new(py, converted)))
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub enum Coa<T: Convert> {
+    Owned(T),
+    Shared(Py<<T as Convert>::Output>),
+}
+
+impl<T: Convert + Default> Coa<T> {
+    fn to_shared(&mut self, py: Python) -> PyResult<Py<<T as Convert>::Output>> {
+        match self {
+            Coa::Shared(pyref) => return Ok(pyref.clone_ref(py)),
+            Coa::Owned(value) => {
+                let pyref = std::mem::take(value).convert(py)?;
+                *self = Coa::Shared(pyref.clone_ref(py));
+                Ok(pyref)
+            }
+        }
+    }
+}
+
+impl<T: Convert + Default> Default for Coa<T> {
+    fn default() -> Self {
+        Coa::Owned(T::default())
+    }
+}
+
+impl<T: Convert> From<T> for Coa<T> {
+    fn from(value: T) -> Self {
+        Coa::Owned(value)
     }
 }
 
@@ -121,7 +154,7 @@ pub struct Record {
     comments: Vec<String>,
     sequence: Vec<u8>,
     // contig: Option<Location>,
-    features: Features,
+    features: Coa<Vec<gb_io::seq::Feature>>,
 }
 
 #[pymethods]
@@ -360,24 +393,15 @@ impl Record {
     #[getter]
     fn get_features(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyList>> {
         let py = slf.py();
-        let features = std::mem::take(&mut slf.deref_mut().features);
-        let list = match features {
-            Features::Py(l) => l.clone_ref(py),
-            Features::Vec(v) => {
-                let l = v.convert(py)?;
-                slf.deref_mut().features = Features::Py(l.clone_ref(py));
-                l
-            }
-        };
-        Ok(list)
+        slf.deref_mut().features.to_shared(py)
     }
 
     // TODO: len, source, dblink, references, comments, contig,
 }
 
 impl Convert for gb_io::seq::Seq {
-    type Output = Py<Record>;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
+    type Output = Record;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Py::new(
             py,
             Record {
@@ -393,7 +417,7 @@ impl Convert for gb_io::seq::Seq {
                 keywords: self.keywords,
                 comments: self.comments,
                 sequence: self.seq,
-                features: Features::Vec(self.features),
+                features: self.features.into(),
             },
         )
     }
@@ -444,7 +468,7 @@ pub struct Feature {
     kind: Py<PyString>,
     #[pyo3(get, set)]
     location: PyObject,
-    qualifiers: Qualifiers,
+    qualifiers: Coa<Vec<(gb_io::QualifierKey, Option<String>)>>,
 }
 
 #[pymethods]
@@ -452,21 +476,13 @@ impl Feature {
     #[getter]
     fn get_qualifiers<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyList>> {
         let py = slf.py();
-        if let Qualifiers::Py(pylist) = &slf.deref().qualifiers {
-            return Ok(pylist.clone_ref(py));
-        }
-        let pylist = match &mut slf.deref_mut().qualifiers {
-            Qualifiers::Py(_) => unreachable!(),
-            Qualifiers::Vec(v) => std::mem::take(v).convert(py)?,
-        };
-        slf.deref_mut().qualifiers = Qualifiers::Py(pylist.clone_ref(py));
-        Ok(pylist)
+        slf.qualifiers.to_shared(py)
     }
 }
 
 impl Convert for gb_io::seq::Feature {
-    type Output = Py<Feature>;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
+    type Output = Feature;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Py::new(
             py,
             Feature {
@@ -478,39 +494,14 @@ impl Convert for gb_io::seq::Feature {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Features {
-    Vec(Vec<gb_io::seq::Feature>),
-    Py(Py<PyList>),
-}
-
-impl Default for Features {
-    fn default() -> Self {
-        Features::Vec(Vec::new())
-    }
-}
-
 // ---------------------------------------------------------------------------
 
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
-    key: QualifierKey,
+    key: Coa<gb_io::QualifierKey>,
     #[pyo3(get, set)]
     value: Option<String>,
-}
-
-impl Qualifier {
-    pub fn new<K, V>(key: K, value: V) -> Self
-    where
-        K: Into<QualifierKey>,
-        V: Into<Option<String>>,
-    {
-        Self {
-            key: key.into(),
-            value: value.into(),
-        }
-    }
 }
 
 #[pymethods]
@@ -518,61 +509,27 @@ impl Qualifier {
     #[getter]
     fn get_key<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
         let py = slf.py();
-        let pystring = match &slf.deref().key {
-            QualifierKey::Py(pystring) => return Ok(pystring.clone_ref(py)),
-            QualifierKey::Atom(atom) => Py::from(PyString::new(py, atom.as_ref())),
-        };
-        slf.deref_mut().key = QualifierKey::Py(pystring.clone_ref(py));
-        Ok(pystring)
+        slf.key.to_shared(py)
+    }
+}
+
+impl Convert for gb_io::QualifierKey {
+    type Output = PyString;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Ok(interner.intern(py, self))
     }
 }
 
 impl Convert for (gb_io::QualifierKey, Option<String>) {
-    type Output = Py<Qualifier>;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Self::Output> {
-        Py::new(py, Qualifier::new(self.0, self.1))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum QualifierKey {
-    Atom(gb_io::QualifierKey),
-    Py(Py<PyString>),
-}
-
-impl From<gb_io::QualifierKey> for QualifierKey {
-    fn from(key: gb_io::QualifierKey) -> Self {
-        QualifierKey::Atom(key)
-    }
-}
-
-impl From<Py<PyString>> for QualifierKey {
-    fn from(key: Py<PyString>) -> Self {
-        QualifierKey::Py(key)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Qualifiers {
-    Vec(Vec<(gb_io::QualifierKey, Option<String>)>),
-    Py(Py<PyList>),
-}
-
-impl Default for Qualifiers {
-    fn default() -> Self {
-        Qualifiers::Vec(Vec::new())
-    }
-}
-
-impl From<Vec<(gb_io::QualifierKey, Option<String>)>> for Qualifiers {
-    fn from(value: Vec<(gb_io::QualifierKey, Option<String>)>) -> Self {
-        Qualifiers::Vec(value)
-    }
-}
-
-impl From<Py<PyList>> for Qualifiers {
-    fn from(value: Py<PyList>) -> Self {
-        Qualifiers::Py(value)
+    type Output = Qualifier;
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Py::new(
+            py,
+            Qualifier {
+                key: self.0.into(),
+                value: self.1,
+            },
+        )
     }
 }
 
@@ -583,8 +540,8 @@ impl From<Py<PyList>> for Qualifiers {
 pub struct Location;
 
 impl Convert for gb_io::seq::Location {
-    type Output = PyObject;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Self::Output> {
+    type Output = PyAny;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
                 let objects: PyObject = $inner
