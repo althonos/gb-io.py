@@ -7,13 +7,10 @@ mod built;
 mod iter;
 mod pyfile;
 
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::io::Read;
 use std::io::Write;
-use std::ops::Deref;
 use std::ops::DerefMut;
-use std::sync::Arc;
 use std::sync::RwLock;
 
 use gb_io::reader::GbParserError;
@@ -21,22 +18,18 @@ use gb_io::reader::SeqReader;
 use gb_io::seq::After;
 use gb_io::seq::Before;
 use gb_io::seq::Location as SeqLocation;
-use gb_io::seq::Seq;
 use gb_io::seq::Topology;
 use gb_io::writer::SeqWriter;
 use pyo3::exceptions::PyIOError;
-use pyo3::exceptions::PyIndexError;
 use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
-use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::pyclass::PyClass;
 use pyo3::types::PyBytes;
 use pyo3::types::PyDate;
 use pyo3::types::PyDateAccess;
-use pyo3::types::PyDict;
 use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
@@ -362,7 +355,7 @@ impl Record {
 
 impl Convert for gb_io::seq::Seq {
     type Output = Record;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Py::new(
             py,
             Record {
@@ -525,7 +518,7 @@ impl Feature {
 
 impl Convert for gb_io::seq::Feature {
     type Output = Feature;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Py::new(
             py,
             Feature {
@@ -1008,7 +1001,7 @@ pub struct Reference {
 
 impl Convert for gb_io::seq::Reference {
     type Output = Reference;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Py::new(
             py,
             Reference {

@@ -10,7 +10,6 @@ use pyo3::types::PyBytes;
 use pyo3::types::PyString;
 use pyo3::types::PyType;
 use pyo3::FromPyPointer;
-use pyo3::PyObject;
 
 // ---------------------------------------------------------------------------
 
@@ -228,7 +227,7 @@ impl PyFileGILRead {
         let res = file.call_method1("read", (0,))?;
         if res.downcast::<PyBytes>().is_ok() {
             let obj = file.into_py(py);
-            PyFileGILReadBin::new(py, obj).map(Self::Binary)
+            PyFileGILReadBin::new(obj).map(Self::Binary)
         } else if res.downcast::<PyString>().is_ok() {
             let obj = file.into_py(py);
             PyFileGILReadText::new(py, obj).map(Self::Text)
@@ -260,7 +259,7 @@ pub struct PyFileGILReadBin {
 }
 
 impl PyFileGILReadBin {
-    pub fn new(py: Python, file: PyObject) -> PyResult<Self> {
+    pub fn new(file: PyObject) -> PyResult<Self> {
         #[cfg(feature = "cpython")]
         {
             file.as_ref(py)
