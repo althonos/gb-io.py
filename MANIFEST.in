@@ -7,7 +7,7 @@ include README.md
 include pyproject.toml
 
 recursive-include derive Cargo.toml *.rs
-recursive-include src *.rs
+recursive-include gb_io/lib *.rs
 recursive-include tests *
 
 include .cargo/config.toml

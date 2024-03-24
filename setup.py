@@ -127,10 +127,12 @@ class build_rust(_build_rust):
 
     def get_dylib_ext_path(self, ext, module_name):
         ext_path = _build_rust.get_dylib_ext_path(self, ext, module_name)
-        if self.inplace:
-            base = os.path.basename(ext_path)
-            folder = os.path.dirname(os.path.realpath(__file__))
-            ext_path = os.path.join(folder, base)
+        # print("EXT", ext_path)
+        # if self.inplace:
+        #     base = os.path.basename(ext_path)
+        #     folder = os.path.dirname(os.path.abspath(__file__))
+        #     ext_path = os.path.join(folder, base)
+        #     print("EXT", ext_path)
         return ext_path
 
 
@@ -139,7 +141,7 @@ setuptools.setup(
     cmdclass=dict(sdist=sdist, build_rust=build_rust, vendor=vendor),
     rust_extensions=[
         rust.RustExtension(
-            "gb_io",
+            os.path.join("gb_io", "lib"),
             path="Cargo.toml",
             binding=rust.Binding.PyO3,
             strip=rust.Strip.Debug,

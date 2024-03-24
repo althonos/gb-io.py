@@ -1076,7 +1076,7 @@ impl Extract for gb_io::seq::Reference {
 /// A fast GenBank I/O library based on the ``gb-io`` Rust crate.
 ///
 #[pymodule]
-#[pyo3(name = "gb_io")]
+#[pyo3(name = "lib")]
 pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<self::Location>()?;
     m.add_class::<self::Range>()?;
