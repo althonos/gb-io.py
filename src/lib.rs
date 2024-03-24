@@ -269,7 +269,7 @@ impl Record {
     //         false => Topology::Linear,
     //     };
 
-    //     let record = Record::from(Seq {
+    //     let record = gb_io::seq::Seq {
     //         name,
     //         division,
     //         seq,
@@ -287,7 +287,7 @@ impl Record {
     //         dblink: None,
     //         keywords: None,
     //         references: Vec::new(),
-    //     });
+    //     }.convert(py);
     //     Ok(record.into())
     // }
 
@@ -432,6 +432,25 @@ pub struct Source {
     organism: Option<String>,
 }
 
+#[pymethods]
+impl Source {
+    #[new]
+    #[pyo3(signature = (name, organism = None))]
+    fn __new__(name: String, organism: Option<String>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Self { name, organism })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<&PyAny> {
+        let py = slf.py();
+        let name = &slf.name;
+        if let Some(v) = &slf.organism {
+            PyString::new(py, "Source({}, {})").call_method1("format", (name, v))
+        } else {
+            PyString::new(py, "Source({})").call_method1("format", (name,))
+        }
+    }
+}
+
 impl Temporary for gb_io::seq::Source {
     fn temporary() -> Self {
         gb_io::seq::Source {
@@ -503,6 +522,11 @@ impl Feature {
         slf.kind.to_shared(py)
     }
 
+    #[setter]
+    fn set_kind<'py>(mut slf: PyRefMut<'py, Self>, kind: &'py PyString) {
+        slf.kind = Coa::Shared(Py::from(kind));
+    }
+
     #[getter]
     fn get_location<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
@@ -568,10 +592,34 @@ pub struct Qualifier {
 
 #[pymethods]
 impl Qualifier {
+    #[new]
+    #[pyo3(signature = (key, value = None))]
+    fn __new__(key: &PyString, value: Option<String>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Self {
+            key: Coa::Shared(Py::from(key)),
+            value,
+        })
+    }
+
+    fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<&PyAny> {
+        let py = slf.py();
+        let key = slf.key.to_shared(py)?;
+        if let Some(v) = &slf.value {
+            PyString::new(py, "Qualifier({}, {})").call_method1("format", (key, v))
+        } else {
+            PyString::new(py, "Qualifier({})").call_method1("format", (key,))
+        }
+    }
+
     #[getter]
     fn get_key<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
         let py = slf.py();
         slf.key.to_shared(py)
+    }
+
+    #[setter]
+    fn set_key<'py>(mut slf: PyRefMut<'py, Self>, key: &'py PyString) {
+        slf.key = Coa::Shared(Py::from(key));
     }
 }
 
@@ -986,11 +1034,11 @@ pub struct Reference {
     #[pyo3(get, set)]
     description: String,
     #[pyo3(get, set)]
+    title: String,
+    #[pyo3(get, set)]
     authors: Option<String>,
     #[pyo3(get, set)]
     consortium: Option<String>,
-    #[pyo3(get, set)]
-    title: String,
     #[pyo3(get, set)]
     journal: Option<String>,
     #[pyo3(get, set)]
