@@ -77,3 +77,5 @@ macro_rules! unittest {
 
 unittest!(test_doctests);
 unittest!(test_biopython);
+unittest!(test_load);
+unittest!(test_dump);
