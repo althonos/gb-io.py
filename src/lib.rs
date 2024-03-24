@@ -93,6 +93,11 @@ where
     }
 }
 
+/// A trait for types that can be extracted from an equivalent Python type.
+pub trait Extract: Convert {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self>;
+}
+
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
@@ -135,7 +140,7 @@ pub struct Record {
     #[pyo3(get, set)]
     name: Option<String>,
     topology: Topology,
-    // date: Option<Date>,
+    date: Option<Coa<gb_io::seq::Date>>,
     #[pyo3(get, set)]
     len: Option<usize>,
     molecule_type: Option<String>,
@@ -147,13 +152,13 @@ pub struct Record {
     accession: Option<String>,
     #[pyo3(get, set)]
     version: Option<String>,
-    // source: Option<Source>,
+    source: Option<Coa<gb_io::seq::Source>>,
     dblink: Option<String>,
     keywords: Option<String>,
-    // references: Vec<Arc<Reference>>,
+    references: Coa<Vec<gb_io::seq::Reference>>,
     comments: Vec<String>,
     sequence: Vec<u8>,
-    // contig: Option<Location>,
+    contig: Option<Coa<gb_io::seq::Location>>,
     features: Coa<Vec<gb_io::seq::Feature>>,
 }
 
@@ -407,19 +412,48 @@ impl Convert for gb_io::seq::Seq {
             Record {
                 name: self.name,
                 topology: self.topology,
+                date: self.date.map(Coa::Owned),
                 len: self.len,
                 molecule_type: self.molecule_type,
                 division: self.division,
                 definition: self.definition,
                 accession: self.accession,
                 version: self.version,
+                source: self.source.map(Coa::Owned),
                 dblink: self.dblink,
                 keywords: self.keywords,
+                references: self.references.into(),
                 comments: self.comments,
                 sequence: self.seq,
+                contig: self.contig.map(Coa::Owned),
                 features: self.features.into(),
             },
         )
+    }
+}
+
+impl Extract for gb_io::seq::Seq {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let record = object.as_ref(py).borrow();
+        Ok(gb_io::seq::Seq {
+            name: record.name.clone(),
+            topology: record.topology.clone(),
+            date: unimplemented!(),
+            len: record.len.clone(),
+            molecule_type: record.molecule_type.clone(),
+            division: record.division.clone(),
+            definition: record.definition.clone(),
+            accession: record.accession.clone(),
+            version: record.version.clone(),
+            source: unimplemented!(),
+            dblink: record.dblink.clone(),
+            keywords: record.keywords.clone(),
+            references: unimplemented!(),
+            comments: record.comments.clone(),
+            seq: record.sequence.clone(),
+            contig: unimplemented!(),
+            features: unimplemented!(),
+        })
     }
 }
 
@@ -435,27 +469,27 @@ impl From<Record> for gb_io::seq::Seq {
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Source {
-    seq: Arc<RwLock<Seq>>,
+    source: String,
+    organism: Option<String>,
 }
 
-#[pymethods]
-impl Source {
-    #[getter]
-    fn get_source<'py>(slf: PyRef<'py, Self>) -> PyObject {
-        let py = slf.py();
-        let seq = slf.seq.read().expect("failed to read lock");
-        PyString::new(py, &seq.source.as_ref().unwrap().source).to_object(py)
+impl Convert for gb_io::seq::Source {
+    type Output = Source;
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Py::new(
+            py,
+            Source {
+                source: self.source,
+                organism: self.organism,
+            },
+        )
     }
+}
 
-    #[getter]
-    fn get_organism<'py>(slf: PyRef<'py, Self>) -> Option<PyObject> {
-        let py = slf.py();
-        let seq = slf.seq.read().expect("failed to read lock");
-        if let Some(organism) = &seq.source.as_ref().unwrap().organism {
-            Some(PyString::new(py, organism).to_object(py))
-        } else {
-            None
-        }
+impl Convert for gb_io::seq::Date {
+    type Output = PyDate;
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Ok(PyDate::new(py, self.year() as i32, self.month() as u8, self.day() as u8)?.into())
     }
 }
 
@@ -832,6 +866,44 @@ impl External {
             None => PyString::new(py, "External({})").call_method1("format", (&slf.accession,))?,
         };
         Ok(s.to_object(py))
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[pyclass(module = "gb_io")]
+pub struct Reference {
+    #[pyo3(get, set)]
+    description: String,
+    #[pyo3(get, set)]
+    authors: Option<String>,
+    #[pyo3(get, set)]
+    consortium: Option<String>,
+    #[pyo3(get, set)]
+    title: String,
+    #[pyo3(get, set)]
+    journal: Option<String>,
+    #[pyo3(get, set)]
+    pubmed: Option<String>,
+    #[pyo3(get, set)]
+    remark: Option<String>,
+}
+
+impl Convert for gb_io::seq::Reference {
+    type Output = Reference;
+    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Py::new(
+            py,
+            Reference {
+                description: self.description,
+                authors: self.authors,
+                consortium: self.consortium,
+                title: self.title,
+                journal: self.journal,
+                pubmed: self.pubmed,
+                remark: self.remark,
+            },
+        )
     }
 }
 
