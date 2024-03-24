@@ -13,6 +13,7 @@ use pyo3::prelude::*;
 
 use super::pyfile::PyFileGILRead;
 use super::Convert;
+use super::PyInterner;
 use super::Record;
 
 // ---------------------------------------------------------------------------
@@ -46,11 +47,15 @@ impl Read for Handle {
 #[pyclass(module = "gb_io")]
 pub struct RecordReader {
     reader: SeqReader<Handle>,
+    interner: PyInterner,
 }
 
 impl RecordReader {
     fn new(reader: SeqReader<Handle>) -> PyResult<Self> {
-        Ok(Self { reader })
+        Ok(Self {
+            reader,
+            interner: Default::default(),
+        })
     }
 
     pub fn from_path<P: AsRef<Path>>(path: P) -> PyResult<Self> {
@@ -82,9 +87,12 @@ impl RecordReader {
     }
 
     fn __next__<'p>(mut slf: PyRefMut<'p, Self>) -> PyResult<Option<Py<Record>>> {
-        match slf.deref_mut().reader.next() {
+        let slf = slf.deref_mut();
+        match slf.reader.next() {
             None => Ok(None),
-            Some(Ok(seq)) => Python::with_gil(|py| Ok(Some(seq.convert(py)?))),
+            Some(Ok(seq)) => {
+                Python::with_gil(|py| Ok(Some(seq.convert_with(py, &mut slf.interner)?)))
+            }
             Some(Err(e)) => {
                 Python::with_gil(|py| {
                     if PyErr::occurred(py) {

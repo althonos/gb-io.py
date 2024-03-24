@@ -462,68 +462,6 @@ impl Convert for gb_io::seq::Feature {
     }
 }
 
-// impl From<gb_io::seq::Feature> for Feature {
-//     fn from(feature: gb_io::seq::Feature) -> Self {
-
-//     }
-// }
-
-// #[pyclass(module = "gb_io")]
-// #[derive(Debug)]
-// pub struct Qualifiers {
-//     key: gb_io::QualifierKey,
-//     value: Option<String>,
-// }
-
-// #[pymethods]
-// impl Qualifiers {
-//     /// Group the qualifiers by key into a dictionary.
-//     fn to_dict(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-//         let seq = slf.seq.read().expect("failed to read lock");
-//         let feature = &seq.features[slf.index];
-
-//         let dict = PyDict::new(slf.py());
-//         for (key, value) in feature.qualifiers.iter() {
-//             if let Some(v) = value {
-//                 let l = dict
-//                     .call_method1("setdefault", (key.deref(), PyList::empty(slf.py())))?
-//                     .downcast::<PyList>()?;
-//                 l.append(PyString::new(slf.py(), v))?;
-//             }
-//         }
-
-//         Ok(dict.into_py(slf.py()))
-//     }
-
-//     fn __len__(slf: PyRef<'_, Self>) -> PyResult<usize> {
-//         let seq = slf.seq.read().expect("failed to read lock");
-//         let feature = &seq.features[slf.index];
-//         Ok(feature.qualifiers.len())
-//     }
-
-//     fn __getitem__(slf: PyRef<'_, Self>, mut item: isize) -> PyResult<Py<Qualifier>> {
-//         let seq = slf.seq.read().expect("failed to read lock");
-//         let feature = &seq.features[slf.index];
-
-//         let length = feature.qualifiers.len();
-//         if item < 0 {
-//             item += length as isize;
-//         }
-//         if item < 0 || item >= length as isize {
-//             Err(PyIndexError::new_err(item))
-//         } else {
-//             let qualifier = &feature.qualifiers[item as usize];
-//             Py::new(
-//                 slf.py(),
-//                 Qualifier {
-//                     key: qualifier.0.clone(),
-//                     value: qualifier.1.clone(),
-//                 },
-//             )
-//         }
-//     }
-// }
-
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
@@ -557,46 +495,6 @@ impl Convert for (QualifierKey, Option<String>) {
 #[pyclass(module = "gb_io", subclass)]
 #[derive(Debug)]
 pub struct Location;
-
-// impl Location {
-//     fn convert(py: Python<'_>, location: &SeqLocation) -> PyResult<PyObject> {
-//         macro_rules! convert_vec {
-//             ($ty:ident, $inner:expr) => {{
-//                 let objects: PyObject = $inner
-//                     .iter()
-//                     .map(|loc| Location::convert(py, loc))
-//                     .collect::<PyResult<Vec<PyObject>>>()
-//                     .map(|objects| PyList::new(py, objects))
-//                     .map(|list| list.to_object(py))?;
-//                 Py::new(py, Join::__new__(objects)).map(|x| x.to_object(py))
-//             }};
-//         }
-
-//         match location {
-//             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
-//                 Py::new(py, Range::__new__(*start, *end, *before, *after)).map(|x| x.to_object(py))
-//             }
-//             SeqLocation::Between(start, end) => {
-//                 Py::new(py, Between::__new__(*start, *end)).map(|x| x.to_object(py))
-//             }
-//             SeqLocation::Complement(inner_location) => Location::convert(py, inner_location)
-//                 .and_then(|inner| Py::new(py, Complement::__new__(inner)))
-//                 .map(|x| x.to_object(py)),
-//             SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
-//             SeqLocation::Order(inner_locations) => convert_vec!(Order, inner_locations),
-//             SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
-//             SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
-//             SeqLocation::External(accession, location) => {
-//                 let loc = location.clone().map(|x| Location::convert(py, &x)).transpose()?;
-//                 Py::new(py, External::__new__(accession.clone(), loc)).map(|x| x.to_object(py))
-//             }
-//             _ => Err(PyNotImplementedError::new_err(format!(
-//                 "conversion of {:?}",
-//                 location
-//             ))),
-//         }
-//     }
-// }
 
 impl Convert for gb_io::seq::Location {
     type Output = PyObject;
@@ -910,10 +808,9 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<self::Bond>()?;
     m.add_class::<self::OneOf>()?;
     m.add_class::<self::External>()?;
-    // m.add_class::<self::Qualifier>()?;
+    m.add_class::<self::Qualifier>()?;
     // m.add_class::<self::Qualifiers>()?;
     m.add_class::<self::Feature>()?;
-    // m.add_class::<self::Features>()?;
     m.add_class::<self::Record>()?;
     m.add_class::<self::RecordReader>()?;
     m.add("__package__", "gb_io")?;
