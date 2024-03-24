@@ -6,7 +6,9 @@ include CHANGELOG.md
 include README.md
 include pyproject.toml
 
+include gb_io/py.typed
 recursive-include derive Cargo.toml *.rs
+recursive-include gb_io *.pyi
 recursive-include gb_io/lib *.rs
 recursive-include tests *
 
