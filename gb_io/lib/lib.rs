@@ -210,7 +210,7 @@ pub struct Record {
     name: Option<String>,
     /// `int` or `None`: The number of positions in the record sequence.
     #[pyo3(get, set)]
-    len: Option<usize>,
+    length: Option<usize>,
     /// `str` or `None`: The type of molecule (DNA, RNA, etc.).
     #[pyo3(get, set)]
     molecule_type: Option<String>,
@@ -342,6 +342,13 @@ impl Record {
         let py = slf.py();
         slf.deref_mut().features.to_shared(py)
     }
+
+    /// `list`: A list of `Reference` within the record.
+    #[getter]
+    fn get_references(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyList>> {
+        let py = slf.py();
+        slf.deref_mut().references.to_shared(py)
+    }
 }
 
 impl Convert for gb_io::seq::Seq {
@@ -353,7 +360,7 @@ impl Convert for gb_io::seq::Seq {
                 name: self.name,
                 topology: self.topology,
                 date: self.date.map(Coa::Owned),
-                len: self.len,
+                length: self.len,
                 molecule_type: self.molecule_type,
                 division: self.division,
                 definition: self.definition,
@@ -378,7 +385,7 @@ impl Extract for gb_io::seq::Seq {
         Ok(gb_io::seq::Seq {
             name: record.name.clone(),
             topology: record.topology.clone(),
-            len: record.len.clone(),
+            len: record.length.clone(),
             molecule_type: record.molecule_type.clone(),
             division: record.division.clone(),
             definition: record.definition.clone(),
@@ -992,7 +999,9 @@ impl OneOf {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct External {
+    #[pyo3(get, set)]
     accession: String,
+    #[pyo3(get)]
     location: Option<PyObject>,
 }
 
