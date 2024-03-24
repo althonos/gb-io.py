@@ -32,6 +32,7 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::pyclass::PyClass;
 use pyo3::types::PyBytes;
 use pyo3::types::PyDate;
 use pyo3::types::PyDateAccess;
@@ -40,6 +41,8 @@ use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::types::PyTuple;
+use pyo3::PyNativeType;
+use pyo3::PyTypeInfo;
 use pyo3_built::pyo3_built;
 
 use self::iter::RecordReader;
@@ -80,10 +83,7 @@ trait Convert: Sized {
     }
 }
 
-impl<T: Convert> Convert for Vec<T>
-where
-    T: Convert,
-{
+impl<T: Convert> Convert for Vec<T> {
     type Output = PyList;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         let converted = self
@@ -99,6 +99,17 @@ trait Extract: Convert {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self>;
 }
 
+impl<T: Extract> Extract for Vec<T>
+where
+    Py<<T as Convert>::Output>: for<'py> FromPyObject<'py>,
+{
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let list = object.as_ref(py);
+        list.into_iter()
+            .map(|elem| T::extract(py, elem.extract()?))
+            .collect()
+    }
+}
 // ---------------------------------------------------------------------------
 
 /// A trait for obtaining a temporary value from a type.
@@ -151,6 +162,32 @@ impl<T: Convert + Temporary> Coa<T> {
     }
 }
 
+impl<T> Coa<T>
+where
+    T: Convert + Extract + Clone,
+    <T as Convert>::Output: PyClass,
+{
+    fn to_owned_class(&self, py: Python) -> PyResult<T> {
+        match self {
+            Coa::Owned(value) => Ok(value.clone()),
+            Coa::Shared(pyref) => Extract::extract(py, pyref.clone_ref(py)),
+        }
+    }
+}
+
+impl<T> Coa<T>
+where
+    T: Convert + Extract + Clone,
+    <T as Convert>::Output: PyTypeInfo + PyNativeType,
+{
+    fn to_owned_native(&self, py: Python) -> PyResult<T> {
+        match self {
+            Coa::Owned(value) => Ok(value.clone()),
+            Coa::Shared(pyref) => Extract::extract(py, pyref.clone_ref(py)),
+        }
+    }
+}
+
 impl<T: Convert + Default> Default for Coa<T> {
     fn default() -> Self {
         Coa::Owned(T::default())
@@ -163,7 +200,7 @@ impl<T: Convert> From<T> for Coa<T> {
     }
 }
 
-// ---------------------------------------------------------------------------
+// -<--------------------------------------------------------------------------
 
 /// A single GenBank record.
 #[pyclass(module = "gb_io")]
@@ -175,6 +212,7 @@ pub struct Record {
     date: Option<Coa<gb_io::seq::Date>>,
     #[pyo3(get, set)]
     len: Option<usize>,
+    #[pyo3(get, set)]
     molecule_type: Option<String>,
     #[pyo3(get)]
     division: String,
@@ -185,7 +223,9 @@ pub struct Record {
     #[pyo3(get, set)]
     version: Option<String>,
     source: Option<Coa<gb_io::seq::Source>>,
+    #[pyo3(get, set)]
     dblink: Option<String>,
+    #[pyo3(get, set)]
     keywords: Option<String>,
     references: Coa<Vec<gb_io::seq::Reference>>,
     comments: Vec<String>,
@@ -432,8 +472,6 @@ impl Record {
         let py = slf.py();
         slf.deref_mut().features.to_shared(py)
     }
-
-    // TODO: len, source, dblink, references, comments, contig,
 }
 
 impl Convert for gb_io::seq::Seq {
@@ -470,21 +508,33 @@ impl Extract for gb_io::seq::Seq {
         Ok(gb_io::seq::Seq {
             name: record.name.clone(),
             topology: record.topology.clone(),
-            date: unimplemented!(),
             len: record.len.clone(),
             molecule_type: record.molecule_type.clone(),
             division: record.division.clone(),
             definition: record.definition.clone(),
             accession: record.accession.clone(),
             version: record.version.clone(),
-            source: unimplemented!(),
             dblink: record.dblink.clone(),
             keywords: record.keywords.clone(),
-            references: unimplemented!(),
             comments: record.comments.clone(),
             seq: record.sequence.clone(),
-            contig: unimplemented!(),
-            features: unimplemented!(),
+            references: record.references.to_owned_native(py)?,
+            features: record.features.to_owned_native(py)?,
+            date: record
+                .date
+                .as_ref()
+                .map(|date| date.to_owned_native(py))
+                .transpose()?,
+            source: record
+                .source
+                .as_ref()
+                .map(|source| source.to_owned_class(py))
+                .transpose()?,
+            contig: record
+                .contig
+                .as_ref()
+                .map(|contig| contig.to_owned_native(py))
+                .transpose()?,
         })
     }
 }
@@ -493,10 +543,19 @@ impl Extract for gb_io::seq::Seq {
 
 /// The source of a GenBank record.
 #[pyclass(module = "gb_io")]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Source {
     source: String,
     organism: Option<String>,
+}
+
+impl Temporary for gb_io::seq::Source {
+    fn temporary() -> Self {
+        gb_io::seq::Source {
+            source: String::new(),
+            organism: None,
+        }
+    }
 }
 
 impl Convert for gb_io::seq::Source {
@@ -509,6 +568,16 @@ impl Convert for gb_io::seq::Source {
                 organism: self.organism,
             },
         )
+    }
+}
+
+impl Extract for gb_io::seq::Source {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let source = object.extract::<&PyCell<Source>>(py)?.borrow();
+        Ok(gb_io::seq::Source {
+            source: source.source.clone(),
+            organism: source.organism.clone(),
+        })
     }
 }
 
@@ -578,10 +647,29 @@ impl Convert for gb_io::seq::Feature {
     }
 }
 
+impl Extract for gb_io::seq::Feature {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let cell = object.as_ref(py);
+        let feature = cell.borrow();
+        Ok(gb_io::seq::Feature {
+            kind: feature.kind.to_owned_native(py)?,
+            location: feature.location.to_owned_native(py)?,
+            qualifiers: Vec::new(),
+        })
+    }
+}
+
 impl Convert for gb_io::seq::FeatureKind {
     type Output = PyString;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Ok(interner.intern(py, self.as_ref()))
+    }
+}
+
+impl Extract for gb_io::seq::FeatureKind {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let s = object.extract::<&PyString>(py)?.to_str()?;
+        Ok(gb_io::seq::FeatureKind::from(s))
     }
 }
 
@@ -675,6 +763,37 @@ impl Convert for gb_io::seq::Location {
                 "conversion of {:?}",
                 self
             ))),
+        }
+    }
+}
+
+impl Extract for gb_io::seq::Location {
+    fn extract(py: Python, object: PyObject) -> PyResult<Self> {
+        if let Ok(range) = object.downcast::<PyCell<Range>>(py) {
+            let range = range.borrow();
+            Ok(SeqLocation::Range(
+                (range.start, gb_io::seq::Before(range.before)),
+                (range.end, gb_io::seq::After(range.after)),
+            ))
+        } else if let Ok(between) = object.downcast::<PyCell<Between>>(py) {
+            let between = between.borrow();
+            Ok(SeqLocation::Between(between.start, between.end))
+        } else if let Ok(complement) = object.downcast::<PyCell<Complement>>(py) {
+            let complement = complement.borrow();
+            let location = Extract::extract(py, complement.location.clone_ref(py))?;
+            Ok(SeqLocation::Complement(Box::new(location)))
+        } else if let Ok(join) = object.downcast::<PyCell<Join>>(py) {
+            unimplemented!("Join")
+        } else if let Ok(order) = object.downcast::<PyCell<Order>>(py) {
+            unimplemented!("Order")
+        } else if let Ok(bond) = object.downcast::<PyCell<Bond>>(py) {
+            unimplemented!("Bond")
+        } else if let Ok(one_of) = object.downcast::<PyCell<OneOf>>(py) {
+            unimplemented!("OneOf")
+        } else if let Ok(external) = object.downcast::<PyCell<External>>(py) {
+            unimplemented!("External")
+        } else {
+            Err(PyTypeError::new_err("expected Location"))
         }
     }
 }
@@ -968,6 +1087,21 @@ impl Convert for gb_io::seq::Reference {
                 remark: self.remark,
             },
         )
+    }
+}
+
+impl Extract for gb_io::seq::Reference {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let reference = object.as_ref(py).borrow();
+        Ok(gb_io::seq::Reference {
+            description: reference.description.clone(),
+            authors: reference.authors.clone(),
+            consortium: reference.consortium.clone(),
+            title: reference.title.clone(),
+            journal: reference.journal.clone(),
+            pubmed: reference.pubmed.clone(),
+            remark: reference.remark.clone(),
+        })
     }
 }
 
