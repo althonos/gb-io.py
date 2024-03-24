@@ -117,6 +117,12 @@ trait Temporary: Sized {
     fn temporary() -> Self;
 }
 
+impl Temporary for gb_io::seq::Date {
+    fn temporary() -> Self {
+        gb_io::seq::Date::from_ymd(1970, 1, 1).unwrap()
+    }
+}
+
 impl Temporary for gb_io::QualifierKey {
     fn temporary() -> Self {
         gb_io::QualifierKey::from("gene")
@@ -206,27 +212,37 @@ impl<T: Convert> From<T> for Coa<T> {
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Clone)]
 pub struct Record {
+    /// `str` or `None`: The name of the locus.
     #[pyo3(get, set)]
     name: Option<String>,
-    topology: Topology,
-    date: Option<Coa<gb_io::seq::Date>>,
+    /// `int` or `None`: The number of positions in the record sequence.
     #[pyo3(get, set)]
     len: Option<usize>,
+    /// `str` or `None`: The type of molecule (DNA, RNA, etc.).
     #[pyo3(get, set)]
     molecule_type: Option<String>,
-    #[pyo3(get)]
+    /// `str`: The GenBank division to which the record belongs.
+    #[pyo3(get, set)]
     division: String,
+    /// `str` or `None`: The definition of the record.
     #[pyo3(get, set)]
     definition: Option<String>,
+    /// `str` or `None`: The accession of the record.
     #[pyo3(get, set)]
     accession: Option<String>,
+    /// `str` or `None`: The version of the record.
     #[pyo3(get, set)]
     version: Option<String>,
-    source: Option<Coa<gb_io::seq::Source>>,
+    /// `str` or `None`: The database link for the record.
     #[pyo3(get, set)]
     dblink: Option<String>,
+    /// `str` or `None`: Word or phrase describing the sequence.
     #[pyo3(get, set)]
     keywords: Option<String>,
+
+    topology: Topology,
+    date: Option<Coa<gb_io::seq::Date>>,
+    source: Option<Coa<gb_io::seq::Source>>,
     references: Coa<Vec<gb_io::seq::Reference>>,
     comments: Vec<String>,
     sequence: Vec<u8>,
@@ -282,182 +298,52 @@ impl Record {
     //     Ok(record.into())
     // }
 
-    // /// `str`, optional: The name of the record, or `None`.
-    // #[getter]
-    // fn get_name(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.name {
-    //         None => Ok(slf.py().None()),
-    //         Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
-    //     }
-    // }
+    /// `str`: The topology of the record, either *linear* or *circular*.
+    #[getter]
+    fn get_topology(slf: PyRef<'_, Self>) -> PyResult<&str> {
+        match &slf.topology {
+            Topology::Linear => Ok("linear"),
+            Topology::Circular => Ok("circular"),
+        }
+    }
 
-    // #[setter]
-    // fn set_name(slf: PyRefMut<'_, Self>, name: Option<String>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.name = name;
-    //     Ok(())
-    // }
+    #[setter]
+    fn set_topology(mut slf: PyRefMut<'_, Self>, topology: &str) -> PyResult<()> {
+        match topology {
+            "linear" => {
+                slf.topology = Topology::Linear;
+                Ok(())
+            }
+            "circular" => {
+                slf.topology = Topology::Circular;
+                Ok(())
+            }
+            other => {
+                let message = format!("invalid topology: {:?}", other);
+                Err(PyValueError::new_err(message))
+            }
+        }
+    }
 
-    // /// `str`: The topology of the record.
-    // #[getter]
-    // fn get_topology(slf: PyRef<'_, Self>) -> PyResult<&str> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.topology {
-    //         Topology::Linear => Ok("linear"),
-    //         Topology::Circular => Ok("circular"),
-    //     }
-    // }
+    /// `~datetime.date` or `None`: The date this record was submitted.
+    #[getter]
+    fn get_date(mut slf: PyRefMut<'_, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        match &mut slf.deref_mut().date {
+            Some(date) => Ok(date.to_shared(py)?.to_object(py)),
+            None => Ok(py.None()),
+        }
+    }
 
-    // #[setter]
-    // fn set_topology(slf: PyRefMut<'_, Self>, topology: &str) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     match topology {
-    //         "linear" => {
-    //             seq.topology = Topology::Linear;
-    //             Ok(())
-    //         }
-    //         "circular" => {
-    //             seq.topology = Topology::Circular;
-    //             Ok(())
-    //         }
-    //         other => {
-    //             let message = format!("invalid topology: {:?}", other);
-    //             Err(PyValueError::new_err(message))
-    //         }
-    //     }
-    // }
-
-    // /// `str`, optional: The definition of the record, or `None`.
-    // #[getter]
-    // fn get_definition(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.definition {
-    //         None => Ok(slf.py().None()),
-    //         Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
-    //     }
-    // }
-
-    // #[setter]
-    // fn set_definition(slf: PyRefMut<'_, Self>, definition: Option<String>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.definition = definition;
-    //     Ok(())
-    // }
-
-    // /// `str`, optional: The accession of the record, or `None`.
-    // #[getter]
-    // fn get_accession(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.accession {
-    //         None => Ok(slf.py().None()),
-    //         Some(n) => Ok(PyString::new(slf.py(), &n).into_py(slf.py())),
-    //     }
-    // }
-
-    // #[setter]
-    // fn set_accession(slf: PyRefMut<'_, Self>, accession: Option<String>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.accession = accession;
-    //     Ok(())
-    // }
-
-    // /// `str`, optional: The version of the record, or `None`.
-    // #[getter]
-    // fn get_version(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.version {
-    //         None => Ok(slf.py().None()),
-    //         Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
-    //     }
-    // }
-
-    // #[setter]
-    // fn set_version(slf: PyRefMut<'_, Self>, version: Option<String>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.version = version;
-    //     Ok(())
-    // }
-
-    // /// `str`, optional: The molecule type of the record, or `None`.
-    // #[getter]
-    // fn get_molecule_type(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.molecule_type {
-    //         None => Ok(slf.py().None()),
-    //         Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
-    //     }
-    // }
-
-    // #[setter]
-    // fn set_molecule_type(slf: PyRefMut<'_, Self>, molecule_type: Option<String>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.molecule_type = molecule_type;
-    //     Ok(())
-    // }
-
-    // /// `str`: The division this record is stored under in GenBank.
-    // #[getter]
-    // fn get_division(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     Ok(PyString::new(slf.py(), &seq.division).into_py(slf.py()))
-    // }
-
-    // #[setter]
-    // fn set_division(slf: PyRefMut<'_, Self>, division: String) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.division = division;
-    //     Ok(())
-    // }
-
-    // /// `str`, optional: Keywords related to the record, or `None`.
-    // #[getter]
-    // fn get_keywords(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.keywords {
-    //         None => Ok(slf.py().None()),
-    //         Some(v) => Ok(PyString::new(slf.py(), v).into_py(slf.py())),
-    //     }
-    // }
-
-    // #[setter]
-    // fn set_keywords(slf: PyRefMut<'_, Self>, keywords: Option<String>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     seq.keywords = keywords;
-    //     Ok(())
-    // }
-
-    // /// `~datetime.date`, optional: The date this record was submitted, or `None`.
-    // #[getter]
-    // fn get_date(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-    //     let py = slf.py();
-    //     let seq = slf.seq.read().expect("cannot read lock");
-    //     match &seq.date {
-    //         None => Ok(py.None()),
-    //         Some(dt) => {
-    //             let date = PyDate::new(py, dt.year(), dt.month() as u8, dt.day() as u8)?;
-    //             Ok(date.into_py(py))
-    //         }
-    //     }
-    // }
-
-    // #[setter]
-    // fn set_date(slf: PyRefMut<'_, Self>, date: Option<&PyDate>) -> PyResult<()> {
-    //     let mut seq = slf.seq.write().expect("cannot write lock");
-    //     if let Some(dt) = date {
-    //         let year = dt.get_year();
-    //         let month = dt.get_month() as u32;
-    //         let day = dt.get_day() as u32;
-    //         if let Ok(date) = gb_io::seq::Date::from_ymd(year, month, day) {
-    //             seq.date = Some(date);
-    //         } else {
-    //             return Err(PyValueError::new_err("invalid date"));
-    //         }
-    //     } else {
-    //         seq.date = None;
-    //     }
-    //     Ok(())
-    // }
+    #[setter]
+    fn set_date(mut slf: PyRefMut<'_, Self>, date: Option<&PyDate>) -> PyResult<()> {
+        if let Some(dt) = date {
+            slf.date = Some(Coa::Shared(Py::from(dt)));
+        } else {
+            slf.date = None;
+        }
+        Ok(())
+    }
 
     /// `bytes`: The sequence of the record in lowercase, as raw ASCII.
     #[getter]
@@ -545,7 +431,11 @@ impl Extract for gb_io::seq::Seq {
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Default)]
 pub struct Source {
-    source: String,
+    /// `str`: The name of the source organism.
+    #[pyo3(get, set)]
+    name: String,
+    /// `str` or `None`: The scientific classification of the source organism.
+    #[pyo3(get, set)]
     organism: Option<String>,
 }
 
@@ -564,7 +454,7 @@ impl Convert for gb_io::seq::Source {
         Py::new(
             py,
             Source {
-                source: self.source,
+                name: self.source,
                 organism: self.organism,
             },
         )
@@ -575,7 +465,7 @@ impl Extract for gb_io::seq::Source {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
         let source = object.extract::<&PyCell<Source>>(py)?.borrow();
         Ok(gb_io::seq::Source {
-            source: source.source.clone(),
+            source: source.name.clone(),
             organism: source.organism.clone(),
         })
     }
@@ -781,19 +671,29 @@ impl Extract for gb_io::seq::Location {
             let between = between.borrow();
             Ok(SeqLocation::Between(between.start, between.end))
         } else if let Ok(complement) = object.downcast::<PyCell<Complement>>(py) {
-            let complement = complement.borrow();
-            let location = Extract::extract(py, complement.location.clone_ref(py))?;
+            let location = Extract::extract(py, complement.borrow().location.clone_ref(py))?;
             Ok(SeqLocation::Complement(Box::new(location)))
         } else if let Ok(join) = object.downcast::<PyCell<Join>>(py) {
-            unimplemented!("Join")
+            let locations = Extract::extract(py, join.borrow().locations.clone_ref(py))?;
+            Ok(SeqLocation::Join(locations))
         } else if let Ok(order) = object.downcast::<PyCell<Order>>(py) {
-            unimplemented!("Order")
+            let locations = Extract::extract(py, order.borrow().locations.clone_ref(py))?;
+            Ok(SeqLocation::Order(locations))
         } else if let Ok(bond) = object.downcast::<PyCell<Bond>>(py) {
-            unimplemented!("Bond")
+            let locations = Extract::extract(py, bond.borrow().locations.clone_ref(py))?;
+            Ok(SeqLocation::Bond(locations))
         } else if let Ok(one_of) = object.downcast::<PyCell<OneOf>>(py) {
-            unimplemented!("OneOf")
+            let locations = Extract::extract(py, one_of.borrow().locations.clone_ref(py))?;
+            Ok(SeqLocation::OneOf(locations))
         } else if let Ok(external) = object.downcast::<PyCell<External>>(py) {
-            unimplemented!("External")
+            let external = external.borrow();
+            let location = external
+                .location
+                .as_ref()
+                .map(|loc| Extract::extract(py, loc.clone_ref(py)))
+                .transpose()?
+                .map(Box::new);
+            Ok(SeqLocation::External(external.accession.clone(), location))
         } else {
             Err(PyTypeError::new_err("expected Location"))
         }
@@ -1156,10 +1056,11 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<self::OneOf>()?;
     m.add_class::<self::External>()?;
     m.add_class::<self::Qualifier>()?;
-    // m.add_class::<self::Qualifiers>()?;
     m.add_class::<self::Feature>()?;
     m.add_class::<self::Record>()?;
     m.add_class::<self::RecordReader>()?;
+    m.add_class::<self::Reference>()?;
+    m.add_class::<self::Source>()?;
     m.add("__package__", "gb_io")?;
     m.add("__build__", pyo3_built!(py, built))?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
@@ -1268,7 +1169,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     /// Arguments:
     ///     records (`Record` or iterable of `Record`): The records to write
     ///         to the file.
-    ///     fh (str or file-handle): The path to a GenBank file, or a stream
+    ///     fh (`str` or file-handle): The path to a GenBank file, or a stream
     ///         that contains data serialized in GenBank format.
     ///
     /// Keywords Arguments:
