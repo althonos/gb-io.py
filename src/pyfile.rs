@@ -227,7 +227,7 @@ impl PyFileGILRead {
         let res = file.call_method1("read", (0,))?;
         if res.downcast::<PyBytes>().is_ok() {
             let obj = file.into_py(py);
-            PyFileGILReadBin::new(obj).map(Self::Binary)
+            PyFileGILReadBin::new(py, obj).map(Self::Binary)
         } else if res.downcast::<PyString>().is_ok() {
             let obj = file.into_py(py);
             PyFileGILReadText::new(py, obj).map(Self::Text)
@@ -259,7 +259,8 @@ pub struct PyFileGILReadBin {
 }
 
 impl PyFileGILReadBin {
-    pub fn new(file: PyObject) -> PyResult<Self> {
+    #[allow(unused_variables)]
+    pub fn new(py: Python, file: PyObject) -> PyResult<Self> {
         #[cfg(feature = "cpython")]
         {
             file.as_ref(py)
