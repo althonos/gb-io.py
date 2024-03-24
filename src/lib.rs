@@ -489,12 +489,6 @@ impl Extract for gb_io::seq::Seq {
     }
 }
 
-impl From<Record> for gb_io::seq::Seq {
-    fn from(record: Record) -> Self {
-        unimplemented!()
-    }
-}
-
 // ---------------------------------------------------------------------------
 
 /// The source of a GenBank record.
@@ -1116,7 +1110,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     ///          so that the locus line is no longer than 79 characters.
     ///
     /// .. versionadded:: 0.2.0
-    #[pyfunction]
+    #[pyfn(m)]
     #[pyo3(
         name = "dump",
         signature = (records, fh, escape_locus = false, truncate_locus = false),
@@ -1177,10 +1171,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         for result in it {
             // make sure we received a Record object
             let record = result?.extract::<Py<Record>>()?;
-            let cell = record.as_ref(py);
-            let cellref = cell.borrow();
-            // get the seq object
-            let seq = (*cellref).clone().into();
+            let seq = Extract::extract(py, record)?;
             // write the seq
             writer.write(&seq).map_err(|err| match err.raw_os_error() {
                 Some(code) => PyIOError::new_err((code, err.to_string())),
