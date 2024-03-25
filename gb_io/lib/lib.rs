@@ -26,7 +26,6 @@ use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::pyclass::PyClass;
 use pyo3::types::PyBytes;
 use pyo3::types::PyDate;
 use pyo3::types::PyDateAccess;
@@ -34,8 +33,6 @@ use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::types::PyTuple;
-use pyo3::PyNativeType;
-use pyo3::PyTypeInfo;
 use pyo3_built::pyo3_built;
 
 use self::coa::Coa;

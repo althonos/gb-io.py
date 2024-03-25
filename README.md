@@ -30,6 +30,12 @@ the [scikit-bio](http://scikit-bio.org/) parsers.
 This library has no external dependency and is available for all modern Python
 versions (3.7+).
 
+To improve performance, the library implements a *copy-on-access* pattern, 
+so that data is only copied on the Python heap when it is actually being 
+accessed, rather than on object creation. For instance, if the consumer
+of the parser only requires the GenBank features and not the record sequence,
+the sequence will not be copied to a Python `bytes` object.
+
 ## 🔧 Installing
 
 Install the `gb-io` package directly from [PyPi](https://pypi.org/project/gb-io)
@@ -38,19 +44,12 @@ which hosts pre-compiled wheels that can be installed with `pip`:
 $ pip install gb-io
 ```
 
-Wheels are provided for the following platforms:
-- Linux, CPython, x86-64
-- Linux, CPython, Aarch64
-- MacOS, CPython, x86-64
-- MacOS, PyPy, x86-64
-- Windows, CPython, x86-64
-- Windows, PyPy, x86-64
+Wheels are provided for common platforms, such as x86-64 Linux, Windows and 
+MacOS, as well as Aarch64 Linux and MacOS.  If no wheel is available, the source 
+distribution will be downloaded, and a local copy of the Rust compiler will be 
+downloaded to build the package, unless it is already installed on the host machine.
 
-Otherwise, the source distribution will be downloaded, and a local copy of
-the Rust compiler will be downloaded to build the package, unless it is
-already installed on the host machine.
-
-<!-- ## 📖 Documentation
+## 📖 Documentation
 
 A complete [API reference](https://gb-io.readthedocs.io/en/stable/api.html)
 can be found in the [online documentation](https://gb-io.readthedocs.io/),
@@ -58,7 +57,7 @@ or directly from the command line using
 [`pydoc`](https://docs.python.org/3/library/pydoc.html):
 ```console
 $ pydoc gb_io
-``` -->
+```
 
 ## 💡 Usage
 
