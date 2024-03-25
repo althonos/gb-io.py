@@ -6,10 +6,8 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
-
 __author__: str
 __version__: str
-
 
 _STRAND = Literal["+", "-"]
 
@@ -44,6 +42,10 @@ class Feature:
     def location(self) -> Location: ...
     @property
     def qualifiers(self) -> List[Qualifier]: ...
+    def __init__(
+        self, kind: str, location: Location, qualifiers: Optional[List[Qualifier]]
+    ): ...
+    def __repr__(self) -> str: ...
 
 class Qualifier:
     key: str

@@ -514,6 +514,37 @@ pub struct Feature {
 
 #[pymethods]
 impl Feature {
+    #[new]
+    #[pyo3(signature = (kind, location, qualifiers = None))]
+    fn __new__(
+        kind: Py<PyString>,
+        location: Py<Location>,
+        qualifiers: Option<Py<PyList>>,
+    ) -> PyClassInitializer<Self> {
+        let kind = Coa::Shared(kind);
+        let location = Coa::Shared(location);
+        let qualifiers = qualifiers.map(Coa::Shared).unwrap_or_default();
+        PyClassInitializer::from(Self {
+            kind,
+            location,
+            qualifiers,
+        })
+    }
+
+    fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<&PyAny> {
+        let py = slf.py();
+        let kind = slf.kind.to_shared(py)?;
+        let location = slf.location.to_shared(py)?;
+        let qualifiers = slf.qualifiers.to_shared(py)?;
+        if qualifiers.as_ref(py).is_empty() {
+            PyString::new(py, "Feature(kind={!r}, location={!r})")
+                .call_method1("format", (kind, location))
+        } else {
+            PyString::new(py, "Feature(kind={!r}, location={!r}, qualifiers={!r})")
+                .call_method1("format", (kind, location, qualifiers))
+        }
+    }
+
     #[getter]
     fn get_kind<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
         let py = slf.py();
