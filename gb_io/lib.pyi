@@ -24,10 +24,8 @@ class Record:
     circular: bool
     date: Optional[date]
     sequence: bytearray
-    @property
-    def features(self) -> List[Feature]: ...
-    @property
-    def references(self) -> List[Reference]: ...
+    features: List[Feature]
+    references: List[Reference]
     def __init__(
         self,
         sequence: Union[bytes, bytearray, memoryview],
@@ -57,10 +55,8 @@ class Source:
 
 class Feature:
     kind: str
-    @property
-    def location(self) -> Location: ...
-    @property
-    def qualifiers(self) -> List[Qualifier]: ...
+    location: Location
+    qualifiers: List[Qualifier]
     def __init__(
         self, kind: str, location: Location, qualifiers: Optional[List[Qualifier]]
     ): ...
@@ -133,8 +129,6 @@ class OneOf(Location):
 class External(Location):
     accession: str
     location: Optional[Location]
-    @property
-    def location(self) -> Optional[Location]: ...
     def __init__(self, accession: str, location: Optional[Location] = None): ...
     def __repr__(self) -> str: ...
 

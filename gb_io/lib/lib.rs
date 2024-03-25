@@ -250,11 +250,21 @@ impl Record {
         slf.deref_mut().features.to_shared(py)
     }
 
+    #[setter]
+    fn set_features(mut slf: PyRefMut<'_, Self>, features: Py<PyList>) {
+        slf.features = Coa::Shared(features);
+    }
+
     /// `list`: A list of `Reference` within the record.
     #[getter]
     fn get_references(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyList>> {
         let py = slf.py();
         slf.deref_mut().references.to_shared(py)
+    }
+
+    #[setter]
+    fn set_references(mut slf: PyRefMut<'_, Self>, references: Py<PyList>) {
+        slf.references = Coa::Shared(references);
     }
 }
 
