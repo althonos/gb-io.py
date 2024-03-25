@@ -96,6 +96,7 @@ class OneOf(Location):
 
 class External(Location):
     accession: str
+    location: Optional[Location]
     @property
     def location(self) -> Optional[Location]: ...
     def __init__(self, accession: str, location: Optional[Location] = None): ...

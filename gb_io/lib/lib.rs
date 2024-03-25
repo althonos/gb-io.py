@@ -410,7 +410,7 @@ impl Extract for gb_io::seq::Seq {
             contig: record
                 .contig
                 .as_ref()
-                .map(|contig| contig.to_owned_native(py))
+                .map(|contig| contig.to_owned_class(py))
                 .transpose()?,
         })
     }
@@ -526,7 +526,7 @@ impl Feature {
     }
 
     #[getter]
-    fn get_location<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+    fn get_location<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<Location>> {
         let py = slf.py();
         slf.location.to_shared(py)
     }
@@ -558,7 +558,7 @@ impl Extract for gb_io::seq::Feature {
         let feature = cell.borrow();
         Ok(gb_io::seq::Feature {
             kind: feature.kind.to_owned_native(py)?,
-            location: feature.location.to_owned_native(py)?,
+            location: feature.location.to_owned_class(py)?,
             qualifiers: Vec::new(),
         })
     }
@@ -655,40 +655,61 @@ impl Convert for (gb_io::QualifierKey, Option<String>) {
 pub struct Location;
 
 impl Convert for gb_io::seq::Location {
-    type Output = PyAny;
+    type Output = Location;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
                 let objects: PyObject = $inner
                     .into_iter()
                     .map(|loc| loc.convert_with(py, interner))
-                    .collect::<PyResult<Vec<PyObject>>>()
+                    .collect::<PyResult<Vec<Py<Location>>>>()
                     .map(|objects| PyList::new(py, objects))
-                    .map(|list| list.to_object(py))?;
+                    .and_then(|list| list.to_object(py).extract(py))?;
                 Join::__new__(py, objects)
                     .and_then(|x| Py::new(py, x))
-                    .map(|x| x.to_object(py))
+                    .and_then(|x| match x.to_object(py).extract::<Py<Location>>(py) {
+                        Ok(pyref) => Ok(pyref.clone_ref(py)),
+                        Err(e) => Err(PyErr::from(e)),
+                    })
             }};
         }
 
         match self {
             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
-                Py::new(py, Range::__new__(start, end, before, after)).map(|x| x.to_object(py))
+                Py::new(py, Range::__new__(start, end, before, after)).and_then(|x| {
+                    match x.to_object(py).extract::<Py<Location>>(py) {
+                        Ok(pyref) => Ok(pyref.clone_ref(py)),
+                        Err(e) => Err(PyErr::from(e)),
+                    }
+                })
             }
             SeqLocation::Between(start, end) => {
-                Py::new(py, Between::__new__(start, end)).map(|x| x.to_object(py))
+                Py::new(py, Between::__new__(start, end)).and_then(|x| {
+                    match x.to_object(py).extract::<Py<Location>>(py) {
+                        Ok(pyref) => Ok(pyref.clone_ref(py)),
+                        Err(e) => Err(PyErr::from(e)),
+                    }
+                })
             }
             SeqLocation::Complement(inner_location) => (*inner_location)
                 .convert_with(py, interner)
                 .and_then(|inner| Py::new(py, Complement::__new__(inner)))
-                .map(|x| x.to_object(py)),
+                .and_then(|x| match x.to_object(py).extract::<Py<Location>>(py) {
+                    Ok(pyref) => Ok(pyref.clone_ref(py)),
+                    Err(e) => Err(PyErr::from(e)),
+                }),
             SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
             SeqLocation::Order(inner_locations) => convert_vec!(Order, inner_locations),
             SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
             SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
             SeqLocation::External(accession, location) => {
                 let loc = location.map(|x| x.convert_with(py, interner)).transpose()?;
-                Py::new(py, External::__new__(accession, loc)).map(|x| x.to_object(py))
+                Py::new(py, External::__new__(accession, loc)).and_then(|x| {
+                    match x.to_object(py).extract::<Py<Location>>(py) {
+                        Ok(pyref) => Ok(pyref.clone_ref(py)),
+                        Err(e) => Err(PyErr::from(e)),
+                    }
+                })
             }
             _ => Err(PyNotImplementedError::new_err(format!(
                 "conversion of {:?}",
@@ -699,32 +720,33 @@ impl Convert for gb_io::seq::Location {
 }
 
 impl Extract for gb_io::seq::Location {
-    fn extract(py: Python, object: PyObject) -> PyResult<Self> {
-        if let Ok(range) = object.downcast::<PyCell<Range>>(py) {
+    fn extract(py: Python, object: Py<Location>) -> PyResult<Self> {
+        let location = object.as_ref(py);
+        if let Ok(range) = location.downcast::<PyCell<Range>>() {
             let range = range.borrow();
             Ok(SeqLocation::Range(
                 (range.start, gb_io::seq::Before(range.before)),
                 (range.end, gb_io::seq::After(range.after)),
             ))
-        } else if let Ok(between) = object.downcast::<PyCell<Between>>(py) {
+        } else if let Ok(between) = location.downcast::<PyCell<Between>>() {
             let between = between.borrow();
             Ok(SeqLocation::Between(between.start, between.end))
-        } else if let Ok(complement) = object.downcast::<PyCell<Complement>>(py) {
+        } else if let Ok(complement) = location.downcast::<PyCell<Complement>>() {
             let location = Extract::extract(py, complement.borrow().location.clone_ref(py))?;
             Ok(SeqLocation::Complement(Box::new(location)))
-        } else if let Ok(join) = object.downcast::<PyCell<Join>>(py) {
+        } else if let Ok(join) = location.downcast::<PyCell<Join>>() {
             let locations = Extract::extract(py, join.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::Join(locations))
-        } else if let Ok(order) = object.downcast::<PyCell<Order>>(py) {
+        } else if let Ok(order) = location.downcast::<PyCell<Order>>() {
             let locations = Extract::extract(py, order.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::Order(locations))
-        } else if let Ok(bond) = object.downcast::<PyCell<Bond>>(py) {
+        } else if let Ok(bond) = location.downcast::<PyCell<Bond>>() {
             let locations = Extract::extract(py, bond.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::Bond(locations))
-        } else if let Ok(one_of) = object.downcast::<PyCell<OneOf>>(py) {
+        } else if let Ok(one_of) = location.downcast::<PyCell<OneOf>>() {
             let locations = Extract::extract(py, one_of.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::OneOf(locations))
-        } else if let Ok(external) = object.downcast::<PyCell<External>>(py) {
+        } else if let Ok(external) = location.downcast::<PyCell<External>>() {
             let external = external.borrow();
             let location = external
                 .location
@@ -819,13 +841,13 @@ impl Between {
 #[derive(Debug)]
 pub struct Complement {
     #[pyo3(get, set)]
-    location: PyObject,
+    location: Py<Location>,
 }
 
 #[pymethods]
 impl Complement {
     #[new]
-    fn __new__(location: PyObject) -> PyClassInitializer<Self> {
+    fn __new__(location: Py<Location>) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Location).add_subclass(Self { location })
     }
 
@@ -856,6 +878,7 @@ impl Complement {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Join {
+    #[pyo3(get, set)]
     locations: Py<PyList>,
 }
 
@@ -1005,14 +1028,14 @@ impl OneOf {
 pub struct External {
     #[pyo3(get, set)]
     accession: String,
-    #[pyo3(get)]
-    location: Option<PyObject>,
+    #[pyo3(get, set)]
+    location: Option<Py<Location>>,
 }
 
 #[pymethods]
 impl External {
     #[new]
-    fn __new__(accession: String, location: Option<PyObject>) -> PyClassInitializer<Self> {
+    fn __new__(accession: String, location: Option<Py<Location>>) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Location).add_subclass(Self {
             accession,
             location,
