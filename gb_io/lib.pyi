@@ -29,6 +29,24 @@ class Record:
     def features(self) -> List[Feature]: ...
     @property
     def references(self) -> List[Reference]: ...
+    def __init__(
+        self,
+        sequence: Union[bytes, bytearray, memoryview],
+        *,
+        name: Optional[str] = None,
+        length: Optional[str] = None,
+        molecule_type: Optional[str] = None,
+        division: str = "UNK",
+        definition: Optional[str] = None,
+        accession: Optional[str] = None,
+        version: Optional[str] = None,
+        dblink: Optional[str] = None,
+        keywords: Optional[str] = None,
+        circular: bool = False,
+        date: Optional[date] = None,
+        source: Optional[Source] = None,
+        contig: Optional[Location] = None,
+    ): ...
 
 class Source:
     name: str

@@ -20,6 +20,7 @@ use gb_io::seq::Before;
 use gb_io::seq::Location as SeqLocation;
 use gb_io::seq::Topology;
 use gb_io::writer::SeqWriter;
+use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyOSError;
@@ -243,55 +244,103 @@ pub struct Record {
     features: Coa<Vec<gb_io::seq::Feature>>,
 }
 
+impl Record {
+    fn new(sequence: Vec<u8>) -> Self {
+        Record {
+            name: None,
+            length: None,
+            molecule_type: None,
+            division: String::from("UNK"),
+            definition: None,
+            accession: None,
+            version: None,
+            dblink: None,
+            keywords: None,
+            topology: Topology::Linear,
+            date: None,
+            source: None,
+            references: Coa::Owned(Vec::new()),
+            comments: Vec::new(),
+            sequence,
+            contig: None,
+            features: Coa::Owned(Vec::new()),
+        }
+    }
+}
+
 #[pymethods]
 impl Record {
-    // /// Create a new record.
-    // #[new]
-    // #[pyo3(signature = (sequence, *, name = None, division = String::from("UNK"), circular = false, accession = None, version = None))]
-    // fn __init__<'py>(
-    //     sequence: &'py PyAny,
-    //     name: Option<String>,
-    //     division: String,
-    //     circular: bool,
-    //     accession: Option<String>,
-    //     version: Option<String>,
-    // ) -> PyResult<PyClassInitializer<Self>> {
-    //     let seq = if let Ok(sequence_str) = sequence.downcast::<PyString>() {
-    //         sequence_str.to_str()?.as_bytes().to_vec()
-    //     } else if let Ok(sequence_bytes) = sequence.downcast::<PyBytes>() {
-    //         sequence_bytes.as_bytes().to_vec()
-    //     } else {
-    //         return Err(PyTypeError::new_err("Expected str or bytes for `sequence`"));
-    //     };
+    /// Create a new record.
+    #[new]
+    #[pyo3(signature = (
+        sequence,
+        *,
+        name = None,
+        length = None,
+        molecule_type = None,
+        division = String::from("UNK"),
+        definition = None,
+        accession = None,
+        version = None,
+        dblink = None,
+        keywords = None,
+        circular = false,
+        date = None,
+        source = None,
+        contig = None,
+        references = None,
+        features = None,
+    ))]
+    fn __new__<'py>(
+        sequence: &'py PyAny,
+        name: Option<String>,
+        length: Option<usize>,
+        molecule_type: Option<String>,
+        division: String,
+        definition: Option<String>,
+        accession: Option<String>,
+        version: Option<String>,
+        dblink: Option<String>,
+        keywords: Option<String>,
+        circular: bool,
+        date: Option<&'py PyDate>,
+        source: Option<Py<Source>>,
+        contig: Option<Py<Location>>,
+        references: Option<&'py PyAny>,
+        features: Option<&'py PyAny>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let py = sequence.py();
+        let buffer = PyBuffer::<u8>::get(sequence)?;
+        let seq = buffer.to_vec(py)?;
+        let mut record = Record::new(seq);
+        record.name = name;
+        record.length = length;
+        record.molecule_type = molecule_type;
+        record.division = division;
+        record.definition = definition;
+        record.accession = accession;
+        record.version = version;
+        record.dblink = dblink;
+        record.keywords = keywords;
+        if circular {
+            record.topology = Topology::Circular;
+        }
+        record.date = date.map(Py::from).map(Coa::Shared);
+        record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
+        record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
 
-    //     let topology = match circular {
-    //         true => Topology::Circular,
-    //         false => Topology::Linear,
-    //     };
+        if features.is_some() {
+            return Err(PyNotImplementedError::new_err("features"));
+        }
+        if references.is_some() {
+            return Err(PyNotImplementedError::new_err("references"));
+        }
 
-    //     let record = gb_io::seq::Seq {
-    //         name,
-    //         division,
-    //         seq,
-    //         topology,
-    //         contig: None,
-    //         features: Vec::new(),
-    //         comments: Vec::new(),
-    //         date: None,
-    //         len: None,
-    //         molecule_type: None,
-    //         definition: None,
-    //         accession,
-    //         version,
-    //         source: None,
-    //         dblink: None,
-    //         keywords: None,
-    //         references: Vec::new(),
-    //     }.convert(py);
-    //     Ok(record.into())
-    // }
+        // TODO: references, features
+        Ok(PyClassInitializer::from(record))
+    }
 
-    /// `bool`: Whether the record described a circular molecule.
+    /// `bool`: Whether the record describes a circular molecule.
     #[getter]
     fn get_circular(slf: PyRef<'_, Self>) -> bool {
         match &slf.topology {
