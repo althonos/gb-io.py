@@ -322,21 +322,32 @@ impl Record {
         record.version = version;
         record.dblink = dblink;
         record.keywords = keywords;
-        if circular {
-            record.topology = Topology::Circular;
-        }
         record.date = date.map(Py::from).map(Coa::Shared);
         record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
         record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
 
-        if features.is_some() {
-            return Err(PyNotImplementedError::new_err("features"));
+        if circular {
+            record.topology = Topology::Circular;
         }
-        if references.is_some() {
-            return Err(PyNotImplementedError::new_err("references"));
+        if let Some(features_iter) = features {
+            let feature_list = PyList::empty(py);
+            for result in features_iter.iter()? {
+                let object = result?;
+                object.downcast::<PyCell<Feature>>()?;
+                feature_list.append(object)?;
+            }
+            record.features = Coa::Shared(Py::from(feature_list));
+        }
+        if let Some(reference_iter) = references {
+            let reference_list = PyList::empty(py);
+            for result in reference_iter.iter()? {
+                let object = result?;
+                object.downcast::<PyCell<Reference>>()?;
+                reference_list.append(object)?;
+            }
+            record.references = Coa::Shared(Py::from(reference_list));
         }
 
-        // TODO: references, features
         Ok(PyClassInitializer::from(record))
     }
 

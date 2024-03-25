@@ -46,6 +46,8 @@ class Record:
         date: Optional[date] = None,
         source: Optional[Source] = None,
         contig: Optional[Location] = None,
+        references: Optional[Iterable[Reference]] = None,
+        features: Optional[Iterable[Feature]] = None,
     ): ...
 
 class Source:
