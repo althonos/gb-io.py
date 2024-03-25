@@ -18,7 +18,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/althonos/gb-io.py.svg?style=flat-square&maxAge=600)](https://github.com/althonos/gb-io.py/issues)
 [![Changelog](https://img.shields.io/badge/keep%20a-changelog-8A0707.svg?maxAge=2678400&style=flat-square)](https://github.com/althonos/gb-io.py/blob/master/CHANGELOG.md)
 [![Downloads](https://img.shields.io/badge/dynamic/json?style=flat-square&color=303f9f&maxAge=86400&label=downloads&query=%24.total_downloads&url=https%3A%2F%2Fapi.pepy.tech%2Fapi%2Fprojects%2Fgb-io)](https://pepy.tech/project/gb-io)
-<!-- [![Docs](https://img.shields.io/readthedocs/gb-io/latest?style=flat-square&maxAge=600)](https://gb-io.readthedocs.io) -->
+[![Docs](https://img.shields.io/readthedocs/gb-io/latest?style=flat-square&maxAge=600)](https://gb-io.readthedocs.io) -->
 
 ## 🗺️ Overview
 
