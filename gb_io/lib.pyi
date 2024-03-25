@@ -1,8 +1,17 @@
 from datetime import date
 from typing import Optional, Union, BinaryIO, List, Iterator, Iterable
 
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
+
+
 __author__: str
 __version__: str
+
+
+_STRAND = Literal["+", "-"]
 
 class Record:
     name: Optional[str]
@@ -50,6 +59,8 @@ class Range(Location):
     end: int
     before: bool
     after: bool
+    @property
+    def strand(self) -> _STRAND: ...
     def __init__(
         self, start: int, end: int, before: bool = False, after: bool = False
     ): ...
@@ -58,6 +69,8 @@ class Range(Location):
 class Between(Location):
     start: int
     end: int
+    @property
+    def strand(self) -> _STRAND: ...
     def __init__(self, start: int, end: int): ...
     def __repr__(self) -> str: ...
 
@@ -67,6 +80,8 @@ class Complement(Location):
     def start(self) -> int: ...
     @property
     def end(self) -> int: ...
+    @property
+    def strand(self) -> _STRAND: ...
     def __init__(self, location: Location): ...
     def __repr__(self) -> str: ...
 

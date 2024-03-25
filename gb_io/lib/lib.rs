@@ -199,7 +199,7 @@ impl<T: Convert> From<T> for Coa<T> {
     }
 }
 
-// -<--------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 /// A single GenBank record.
 #[pyclass(module = "gb_io")]
@@ -650,6 +650,46 @@ impl Convert for (gb_io::QualifierKey, Option<String>) {
 
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone)]
+pub enum Strand {
+    Direct,
+    Reverse,
+}
+
+impl<'py> FromPyObject<'py> for Strand {
+    fn extract(ob: &'py PyAny) -> PyResult<Self> {
+        let py = ob.py();
+        let value = ob.extract::<&PyString>()?;
+        match value.to_str()? {
+            "+" => Ok(Strand::Direct),
+            "-" => Ok(Strand::Reverse),
+            strand => Err(PyValueError::new_err(
+                PyString::new(py, "invalid strand: {!r}")
+                    .call_method1("format", (strand,))?
+                    .to_object(py),
+            )),
+        }
+    }
+}
+
+impl ToPyObject for Strand {
+    fn to_object(&self, py: Python<'_>) -> PyObject {
+        match self {
+            Strand::Direct => pyo3::intern!(py, "+").to_object(py),
+            Strand::Reverse => pyo3::intern!(py, "-").to_object(py),
+        }
+    }
+}
+
+impl IntoPy<Py<PyString>> for Strand {
+    fn into_py(self, py: Python<'_>) -> Py<PyString> {
+        match self {
+            Strand::Direct => pyo3::intern!(py, "+").into(),
+            Strand::Reverse => pyo3::intern!(py, "-").into(),
+        }
+    }
+}
+
 #[pyclass(module = "gb_io", subclass)]
 #[derive(Debug)]
 pub struct Location;
@@ -811,6 +851,11 @@ impl Range {
             ),
         }
     }
+
+    #[getter]
+    fn get_strand(slf: PyRef<'_, Self>) -> Py<PyString> {
+        Strand::Direct.into_py(slf.py())
+    }
 }
 
 #[pyclass(module = "gb_io", extends = Location)]
@@ -834,6 +879,11 @@ impl Between {
 
     fn __repr__(&self) -> String {
         format!("Between({}, {})", self.start, self.end)
+    }
+
+    #[getter]
+    fn get_strand(slf: PyRef<'_, Self>) -> Py<PyString> {
+        Strand::Direct.into_py(slf.py())
     }
 }
 
@@ -872,6 +922,19 @@ impl Complement {
         slf.location
             .getattr(py, "start")
             .and_then(|start| start.extract(py))
+    }
+
+    #[getter]
+    fn get_strand(slf: PyRef<'_, Self>) -> PyResult<Py<PyString>> {
+        let py = slf.py();
+        match slf
+            .location
+            .getattr(py, "start")
+            .and_then(|start| start.extract(py))?
+        {
+            Strand::Direct => Ok(Strand::Reverse.into_py(py)),
+            Strand::Reverse => Ok(Strand::Direct.into_py(py)),
+        }
     }
 }
 
