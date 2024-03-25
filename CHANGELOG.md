@@ -6,7 +6,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.0...HEAD
+
+
+## [v0.3.0] - 2024-03-25
+[v0.3.0]: https://github.com/althonos/gb-io.py/compare/v0.2.1...v0.3.0
+
+### Added
+- Python constructors to all types.
+- Properties with getter and setters for all remaining `Record` fields.
+- Documentation with API reference at https://gb-io.readthedocs.io.
+
+### Changed
+- Bump `pyo3` dependency to `v0.20`.
+- Add wheels for Python 3.11 and 3.12.
+- Reorganize code to facilitate object creation.
+- Implement copy-on-access for `Record` and `Feature` attributes.
+- `strand` property to some common `Location` types.
+- Make `Record.sequence` a `bytearray` to allow changing the sequence content.
 
 
 ## [v0.2.1] - 2022-12-16

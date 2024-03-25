@@ -31,7 +31,7 @@ jobs:
       with:
         platforms: all
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.16.4
+      uses: pypa/cibuildwheel@v2.17.0
       env:
         CIBW_ARCHS: aarch64
         CIBW_BUILD: ${{ matrix.python-tag }}
@@ -69,7 +69,7 @@ jobs:
         toolchain: stable
         override: true
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.16.4
+      uses: pypa/cibuildwheel@v2.17.0
       env:
         CIBW_ARCHS: x86_64
         CIBW_BUILD: ${{ matrix.python-tag }}
@@ -107,7 +107,7 @@ jobs:
         toolchain: stable
         override: true
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.16.4
+      uses: pypa/cibuildwheel@v2.17.0
       env:
         CIBW_ARCHS: x86_64
         CIBW_BUILD: ${{ matrix.python-tag }}
@@ -141,7 +141,7 @@ jobs:
         override: true
         target: aarch64-apple-darwin
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.16.4
+      uses: pypa/cibuildwheel@v2.17.0
       env:
         CIBW_ARCHS: arm64
         CIBW_BUILD: ${{ matrix.python-tag }}
@@ -179,7 +179,7 @@ jobs:
         toolchain: stable
         override: true
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.16.4
+      uses: pypa/cibuildwheel@v2.17.0
       env:
         CIBW_ARCHS: AMD64
         CIBW_BUILD: ${{ matrix.python-tag }}
