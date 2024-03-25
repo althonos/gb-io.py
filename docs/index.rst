@@ -4,7 +4,7 @@
 .. |Stars| image:: https://img.shields.io/github/stars/althonos/gb-io.py.svg?style=social&maxAge=3600&label=Star
    :target: https://github.com/althonos/pyrodigal/stargazers
 
-*A Python interface to* ``gb-io``, *a fast GenBank parser written in Rust.*
+*A Python interface to* ``gb-io``, *a fast GenBank parser and serializer written in Rust.*
 
 |Actions| |Coverage| |PyPI| |Bioconda| |AUR| |Wheel| |Versions| |Implementations| |License| |Source| |Mirror| |Issues| |Docs| |Changelog| |Downloads|
 
