@@ -1265,6 +1265,31 @@ impl Extract for gb_io::seq::Reference {
 
 /// A fast GenBank I/O library based on the ``gb-io`` Rust crate.
 ///
+/// Example:
+///     Load all the GenBank records from a single file, and print their
+///     accession::
+///
+///         >>> import gb_io
+///         >>> records = gb_io.load("tests/data/AY048670.1.gb")
+///         >>> print([record.accession for record in records])
+///         ['AY048670']
+///
+///     Iterate over records inside a `gzip` compressed GenBank file, and
+///     display the accession and sequence length of each record larger
+///     than 400,000bp::
+///
+///         >>> import gb_io
+///         >>> import gzip
+///         >>> with gzip.open("tests/data/JAOQKG01.1.gb.gz", "rb") as reader:
+///         ...     for record in gb_io.iter(reader):
+///         ...         if len(record.sequence) > 400000:
+///         ...             print(record.name, len(record.sequence))
+///         JAOQKG010000001 754685
+///         JAOQKG010000002 569365
+///         JAOQKG010000003 418835
+///         JAOQKG010000004 418347
+///
+///
 #[pymodule]
 #[pyo3(name = "lib")]
 pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
