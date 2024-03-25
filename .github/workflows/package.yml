@@ -216,6 +216,8 @@ jobs:
     environment: PyPI
     runs-on: ubuntu-latest
     name: Upload
+    permissions:
+      id-token: write
     needs:
     - sdist
     - wheel-linux-aarch64
@@ -230,11 +232,7 @@ jobs:
         name: wheels
         path: dist
     - name: Publish distributions to PyPI
-      uses: pypa/gh-action-pypi-publish@master
-      with:
-        user: __token__
-        password: ${{ secrets.PYPI_API_TOKEN }}
-        skip_existing: true
+      uses: pypa/gh-action-pypi-publish@release/v1
 
   release:
     environment: GitHub Releases
