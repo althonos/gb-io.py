@@ -818,6 +818,7 @@ impl Between {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Complement {
+    #[pyo3(get, set)]
     location: PyObject,
 }
 
@@ -915,6 +916,7 @@ impl Join {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Order {
+    #[pyo3(get, set)]
     locations: Py<PyList>,
 }
 
@@ -943,6 +945,7 @@ impl Order {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Bond {
+    #[pyo3(get, set)]
     locations: Py<PyList>,
 }
 
@@ -971,6 +974,7 @@ impl Bond {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct OneOf {
+    #[pyo3(get, set)]
     locations: Py<PyList>,
 }
 
