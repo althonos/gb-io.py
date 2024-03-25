@@ -983,6 +983,7 @@ impl Join {
     }
 }
 
+/// A location for a `Feature` over disjoint locations in the given order.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Order {
@@ -991,7 +992,6 @@ pub struct Order {
     locations: Py<PyList>,
 }
 
-/// A location for a `Feature` over disjoint locations in the given order.
 #[pymethods]
 impl Order {
     #[new]
@@ -1014,6 +1014,7 @@ impl Order {
     }
 }
 
+/// A location for a `Feature` corresponding to a bond between locations.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Bond {
@@ -1113,12 +1114,12 @@ impl External {
 /// A reference for a record.
 #[pyclass(module = "gb_io")]
 pub struct Reference {
-    /// The location of the record described by the publication.
-    #[pyo3(get, set)]
-    description: String,
     /// `str`: The title of the publication.
     #[pyo3(get, set)]
     title: String,
+    /// The record location described by the publication.
+    #[pyo3(get, set)]
+    description: String,
     /// `str` or `None`: The authors as they appear in the original publication.
     #[pyo3(get, set)]
     authors: Option<String>,
@@ -1134,6 +1135,30 @@ pub struct Reference {
     /// `str` or `None`: A remark about the reference.
     #[pyo3(get, set)]
     remark: Option<String>,
+}
+
+#[pymethods]
+impl Reference {
+    #[new]
+    fn __new__(
+        title: String,
+        description: String,
+        authors: Option<String>,
+        consortium: Option<String>,
+        journal: Option<String>,
+        pubmed: Option<String>,
+        remark: Option<String>,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Self {
+            title,
+            description,
+            authors,
+            consortium,
+            journal,
+            pubmed,
+            remark,
+        })
+    }
 }
 
 impl Convert for gb_io::seq::Reference {
