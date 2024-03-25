@@ -18,7 +18,7 @@ $ python -m unittest discover -vv
 
 This project targets all Python versions supported by the latest release of
 PyO3. It should be able to compile with the `stable` version of the Rust
-compiler
+compiler.
 
 ### Docstrings
 

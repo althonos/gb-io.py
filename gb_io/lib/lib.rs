@@ -1393,8 +1393,6 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     ///         to the file.
     ///     fh (`str` or file-handle): The path to a GenBank file, or a stream
     ///         that contains data serialized in GenBank format.
-    ///
-    /// Keywords Arguments:
     ///     escape_locus (`bool`): Pass `True` to escape any whitespace in
     ///         the locus name with an underscore character.
     ///     truncate_locus (`bool`): Pass `True` to trim the locus fields
