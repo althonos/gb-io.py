@@ -564,6 +564,7 @@ impl Extract for gb_io::seq::Date {
 
 // ---------------------------------------------------------------------------
 
+/// A feature located somewhere in the record.
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Clone)]
 pub struct Feature {
@@ -605,6 +606,7 @@ impl Feature {
         }
     }
 
+    /// `str`: The kind of feature.
     #[getter]
     fn get_kind<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
         let py = slf.py();
@@ -616,16 +618,28 @@ impl Feature {
         slf.kind = Coa::Shared(Py::from(kind));
     }
 
+    /// `Location`: The location of the feature in the record.
     #[getter]
     fn get_location<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<Location>> {
         let py = slf.py();
         slf.location.to_shared(py)
     }
 
+    #[setter]
+    fn set_location<'py>(mut slf: PyRefMut<'py, Self>, kind: Py<Location>) {
+        slf.location = Coa::Shared(kind.clone_ref(slf.py()));
+    }
+
+    /// `list`: A list of `Qualifier` for this particular feature.
     #[getter]
     fn get_qualifiers<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyList>> {
         let py = slf.py();
         slf.qualifiers.to_shared(py)
+    }
+
+    #[setter]
+    fn set_qualifiers<'py>(mut slf: PyRefMut<'py, Self>, qualifiers: Py<PyList>) {
+        slf.qualifiers = Coa::Shared(qualifiers.clone_ref(slf.py()));
     }
 }
 
@@ -671,10 +685,12 @@ impl Extract for gb_io::seq::FeatureKind {
 
 // ---------------------------------------------------------------------------
 
+/// A single key-value qualifier for a `Feature`.
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
     key: Coa<gb_io::QualifierKey>,
+    /// `str` or `None`: An optional value for the qualifier.
     #[pyo3(get, set)]
     value: Option<String>,
 }
@@ -700,6 +716,7 @@ impl Qualifier {
         }
     }
 
+    /// `str`: The qualifier key.
     #[getter]
     fn get_key<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyString>> {
         let py = slf.py();
@@ -781,6 +798,11 @@ impl IntoPy<Py<PyString>> for Strand {
     }
 }
 
+/// A base location for a `Feature`.
+///
+/// This class cannot be instantiated directly, and should not be derived
+/// to avoid breakage in the Rust code. It can however be used for type
+/// annotations where any concrete `Location` subclass can be given.
 #[pyclass(module = "gb_io", subclass)]
 #[derive(Debug)]
 pub struct Location;
@@ -892,6 +914,13 @@ impl Extract for gb_io::seq::Location {
     }
 }
 
+/// A location for a `Feature` spanning over a range of consecutive positions.
+///
+/// The additional ``before`` and ``after`` flags can be set to indicate the
+/// feature spans before its starting index and/or after its ending index.
+/// For instance, a feature location of ``<1..206`` can be created with
+/// ``Range(1, 206, before=True)``.
+///
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Range {
@@ -949,12 +978,15 @@ impl Range {
     }
 }
 
+/// A location for a `Feature` located between two consecutive positions.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Between {
-    #[pyo3(get)]
+    /// `int`: The start of the position interval.
+    #[pyo3(get, set)]
     start: i64,
-    #[pyo3(get)]
+    /// `int`: The end of the position interval.
+    #[pyo3(get, set)]
     end: i64,
 }
 
@@ -978,9 +1010,11 @@ impl Between {
     }
 }
 
+/// A location for a `Feature` on the opposite strand of a given `Location`.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Complement {
+    /// `Location`: The location on the complement strand.
     #[pyo3(get, set)]
     location: Py<Location>,
 }
@@ -1029,9 +1063,11 @@ impl Complement {
     }
 }
 
+/// A location for a `Feature` consisting in joined sequence spans.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Join {
+    /// `list` of `Location`: The locations part of the joint location.
     #[pyo3(get, set)]
     locations: Py<PyList>,
 }
@@ -1093,10 +1129,12 @@ impl Join {
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct Order {
+    /// `list` of `Location`: The locations part of the ordered location.
     #[pyo3(get, set)]
     locations: Py<PyList>,
 }
 
+/// A location for a `Feature` over disjoint locations in the given order.
 #[pymethods]
 impl Order {
     #[new]
@@ -1148,9 +1186,11 @@ impl Bond {
     }
 }
 
+/// A location for a `Feature` located at one of the given locations.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct OneOf {
+    /// `list` of `Location`: The locations at one of which this feature is located.
     #[pyo3(get, set)]
     locations: Py<PyList>,
 }
@@ -1177,11 +1217,14 @@ impl OneOf {
     }
 }
 
+/// A location for a `Feature` located in an external record.
 #[pyclass(module = "gb_io", extends = Location)]
 #[derive(Debug)]
 pub struct External {
+    /// `str`: The accession of the external record where the feature is located.
     #[pyo3(get, set)]
     accession: String,
+    /// `Location` or `None`: The location of the feature in the external record.
     #[pyo3(get, set)]
     location: Option<Py<Location>>,
 }
@@ -1210,20 +1253,28 @@ impl External {
 
 // ---------------------------------------------------------------------------
 
+/// A reference for a record.
 #[pyclass(module = "gb_io")]
 pub struct Reference {
+    /// The location of the record described by the publication.
     #[pyo3(get, set)]
     description: String,
+    /// `str`: The title of the publication.
     #[pyo3(get, set)]
     title: String,
+    /// `str` or `None`: The authors as they appear in the original publication.
     #[pyo3(get, set)]
     authors: Option<String>,
+    /// `str` or `None`: The consortium behind the publication, if any.
     #[pyo3(get, set)]
     consortium: Option<String>,
+    /// `str` or `None`: The journal where the reference was published.
     #[pyo3(get, set)]
     journal: Option<String>,
+    /// `str` or `None`: A PubMed identifier for the publication, if any.
     #[pyo3(get, set)]
     pubmed: Option<String>,
+    /// `str` or `None`: A remark about the reference.
     #[pyo3(get, set)]
     remark: Option<String>,
 }

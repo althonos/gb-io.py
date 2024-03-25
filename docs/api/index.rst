@@ -41,14 +41,6 @@ Record
     :nosignatures:
 
     gb_io.Record
-
-
-Feature
-^^^^^^^
-
-.. autosummary::
-    :nosignatures:
-
     gb_io.Feature
     gb_io.Reference
     gb_io.Source
