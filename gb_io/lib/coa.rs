@@ -3,6 +3,7 @@ use std::sync::RwLock;
 
 use pyo3::prelude::*;
 use pyo3::pyclass::PyClass;
+use pyo3::types::PyByteArray;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::PyNativeType;
@@ -51,6 +52,13 @@ impl<T: Convert> Convert for Vec<T> {
     }
 }
 
+impl Convert for Vec<u8> {
+    type Output = PyByteArray;
+    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+        Ok(Py::from(PyByteArray::new(py, self.as_slice())))
+    }
+}
+
 /// A trait for types that can be extracted from an equivalent Python type.
 pub trait Extract: Convert {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self>;
@@ -65,6 +73,12 @@ where
         list.into_iter()
             .map(|elem| T::extract(py, elem.extract()?))
             .collect()
+    }
+}
+
+impl Extract for Vec<u8> {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        Ok(object.as_ref(py).to_vec())
     }
 }
 

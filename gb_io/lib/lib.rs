@@ -19,14 +19,13 @@ use gb_io::seq::Before;
 use gb_io::seq::Location as SeqLocation;
 use gb_io::seq::Topology;
 use gb_io::writer::SeqWriter;
-use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::PyByteArray;
 use pyo3::types::PyDate;
 use pyo3::types::PyDateAccess;
 use pyo3::types::PyIterator;
@@ -83,13 +82,13 @@ pub struct Record {
     source: Option<Coa<gb_io::seq::Source>>,
     references: Coa<Vec<gb_io::seq::Reference>>,
     comments: Vec<String>,
-    sequence: Vec<u8>,
+    sequence: Coa<Vec<u8>>,
     contig: Option<Coa<gb_io::seq::Location>>,
     features: Coa<Vec<gb_io::seq::Feature>>,
 }
 
-impl Record {
-    fn new(sequence: Vec<u8>) -> Self {
+impl Default for Record {
+    fn default() -> Self {
         Record {
             name: None,
             length: None,
@@ -105,7 +104,7 @@ impl Record {
             source: None,
             references: Coa::Owned(Vec::new()),
             comments: Vec::new(),
-            sequence,
+            sequence: Coa::Owned(Vec::new()),
             contig: None,
             features: Coa::Owned(Vec::new()),
         }
@@ -154,9 +153,7 @@ impl Record {
         features: Option<&'py PyAny>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let py = sequence.py();
-        let buffer = PyBuffer::<u8>::get(sequence)?;
-        let seq = buffer.to_vec(py)?;
-        let mut record = Record::new(seq);
+        let mut record = Record::default();
         record.name = name;
         record.length = length;
         record.molecule_type = molecule_type;
@@ -169,6 +166,7 @@ impl Record {
         record.date = date.map(Py::from).map(Coa::Shared);
         record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
         record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
+        record.sequence = PyByteArray::from(sequence).map(Py::from).map(Coa::Shared)?;
 
         if circular {
             record.topology = Topology::Circular;
@@ -235,9 +233,14 @@ impl Record {
 
     /// `bytes`: The sequence of the record in lowercase, as raw ASCII.
     #[getter]
-    fn get_sequence(slf: PyRef<'_, Self>) -> PyResult<PyObject> {
-        // let seq = slf.seq.read().expect("failed to read lock");
-        Ok(PyBytes::new(slf.py(), &slf.sequence).into())
+    fn get_sequence(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyByteArray>> {
+        let py = slf.py();
+        slf.sequence.to_shared(py)
+    }
+
+    #[setter]
+    fn set_sequence(mut slf: PyRefMut<'_, Self>, sequence: Py<PyByteArray>) {
+        slf.sequence = Coa::Shared(sequence);
     }
 
     /// `list`: A list of `Feature` within the record.
@@ -275,7 +278,7 @@ impl Convert for gb_io::seq::Seq {
                 keywords: self.keywords,
                 references: self.references.into(),
                 comments: self.comments,
-                sequence: self.seq,
+                sequence: Coa::Owned(self.seq),
                 contig: self.contig.map(Coa::Owned),
                 features: self.features.into(),
             },
@@ -298,7 +301,7 @@ impl Extract for gb_io::seq::Seq {
             dblink: record.dblink.clone(),
             keywords: record.keywords.clone(),
             comments: record.comments.clone(),
-            seq: record.sequence.clone(),
+            seq: record.sequence.to_owned_native(py)?,
             references: record.references.to_owned_native(py)?,
             features: record.features.to_owned_native(py)?,
             date: record

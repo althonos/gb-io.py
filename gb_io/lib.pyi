@@ -23,8 +23,7 @@ class Record:
     keywords: Optional[str]
     circular: bool
     date: Optional[date]
-    @property
-    def sequence(self) -> bytes: ...
+    sequence: bytearray
     @property
     def features(self) -> List[Feature]: ...
     @property
