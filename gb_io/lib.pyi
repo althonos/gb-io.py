@@ -1,10 +1,10 @@
-from datetime import date
+import datetime
 from typing import Optional, Union, BinaryIO, List, Iterator, Iterable
 
 try:
     from typing import Literal
 except ImportError:
-    from typing_extensions import Literal
+    from typing_extensions import Literal  # type: ignore
 
 __author__: str
 __version__: str
@@ -22,7 +22,7 @@ class Record:
     dblink: Optional[str]
     keywords: Optional[str]
     circular: bool
-    date: Optional[date]
+    date: Optional[datetime.date]
     sequence: bytearray
     features: List[Feature]
     references: List[Reference]
@@ -40,7 +40,7 @@ class Record:
         dblink: Optional[str] = None,
         keywords: Optional[str] = None,
         circular: bool = False,
-        date: Optional[date] = None,
+        date: Optional[datetime.date] = None,
         source: Optional[Source] = None,
         contig: Optional[Location] = None,
         references: Optional[Iterable[Reference]] = None,
