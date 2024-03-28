@@ -6,7 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.1...HEAD
+
+
+## [v0.3.1] - 2024-03-28
+[v0.3.1]: https://github.com/althonos/gb-io.py/compare/v0.3.0...v0.3.1
+
+### Fixed
+- `Complement.strand` not extracting the right attribute from the inner `Location`.
 
 
 ## [v0.3.0] - 2024-03-25
