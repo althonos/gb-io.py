@@ -911,7 +911,7 @@ impl Complement {
         let py = slf.py();
         match slf
             .location
-            .getattr(py, "start")
+            .getattr(py, "strand")
             .and_then(|start| start.extract(py))?
         {
             Strand::Direct => Ok(Strand::Reverse.into_py(py)),
