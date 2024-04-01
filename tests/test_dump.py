@@ -1,3 +1,4 @@
+import datetime
 import unittest
 import os
 import tempfile
@@ -45,6 +46,32 @@ class TestDump(unittest.TestCase):
         lines_expected = self.contents.strip().splitlines()
         self.assertMultiLineEqual("\n".join(lines_actual[1:]), "\n".join(lines_expected[1:]))
 
+    def test_python_record(self):
+        record = gb_io.Record(
+            sequence=b"ATGC",
+            name="Test sequence",
+            source=gb_io.Source(name="Testus organismae"),
+            date=datetime.date(2024, 4, 1),
+            features=[
+                gb_io.Feature("CDS", gb_io.Range(0, 3), [gb_io.Qualifier("translation", "M")]),
+            ]
+        )
+        with tempfile.NamedTemporaryFile(suffix=".gbk", mode="w+") as f:
+            gb_io.dump(record, f.name)
+            lines_actual = f.read().strip().splitlines()
+        self.assertEqual(
+            lines_actual,
+            [
+                'LOCUS       Test sequence              4 bp            linear UNK 01-APR-2024',
+                'SOURCE      Testus organismae',
+                'FEATURES             Location/Qualifiers',
+                '     CDS             1..3',
+                '                     /translation="M"',
+                'ORIGIN      ',
+                '        1 ATGC',
+                '//'
+            ]
+        )
 
 class TestDumpError(unittest.TestCase):
 
