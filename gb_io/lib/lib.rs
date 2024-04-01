@@ -521,7 +521,7 @@ impl Extract for gb_io::seq::Feature {
         Ok(gb_io::seq::Feature {
             kind: feature.kind.to_owned_native(py)?,
             location: feature.location.to_owned_class(py)?,
-            qualifiers: Vec::new(),
+            qualifiers: feature.qualifiers.to_owned_native(py)?,
         })
     }
 }
@@ -610,6 +610,15 @@ impl Convert for (gb_io::QualifierKey, Option<String>) {
                 value: self.1,
             },
         )
+    }
+}
+
+impl Extract for (gb_io::QualifierKey, Option<String>) {
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        let py_cell = object.as_ref(py);
+        let key = py_cell.borrow().key.to_owned_native(py)?;
+        let value = py_cell.borrow().value.clone();
+        Ok((key, value))
     }
 }
 
