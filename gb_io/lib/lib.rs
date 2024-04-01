@@ -359,9 +359,9 @@ impl Source {
         let py = slf.py();
         let name = &slf.name;
         if let Some(v) = &slf.organism {
-            PyString::new(py, "Source({}, {})").call_method1("format", (name, v))
+            PyString::new(py, "Source({!r}, {!r})").call_method1("format", (name, v))
         } else {
-            PyString::new(py, "Source({})").call_method1("format", (name,))
+            PyString::new(py, "Source({!r})").call_method1("format", (name,))
         }
     }
 }
@@ -567,9 +567,9 @@ impl Qualifier {
         let py = slf.py();
         let key = slf.key.to_shared(py)?;
         if let Some(v) = &slf.value {
-            PyString::new(py, "Qualifier({}, {})").call_method1("format", (key, v))
+            PyString::new(py, "Qualifier({!r}, {!r})").call_method1("format", (key, v))
         } else {
-            PyString::new(py, "Qualifier({})").call_method1("format", (key,))
+            PyString::new(py, "Qualifier({!r})").call_method1("format", (key,))
         }
     }
 
@@ -894,7 +894,7 @@ impl Complement {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
-        let s = PyString::new(py, "Complement({})")
+        let s = PyString::new(py, "Complement({!r})")
             .call_method1("format", (Py::clone_ref(&slf.location, py),))?;
         Ok(s.to_object(py))
     }
@@ -955,7 +955,7 @@ impl Join {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
-        let s = PyString::new(py, "Join({})").call_method1("format", (&slf.locations,))?;
+        let s = PyString::new(py, "Join({!r})").call_method1("format", (&slf.locations,))?;
         Ok(s.to_object(py))
     }
 
@@ -1018,7 +1018,7 @@ impl Order {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
-        let s = PyString::new(py, "Order({})").call_method1("format", (&slf.locations,))?;
+        let s = PyString::new(py, "Order({!r})").call_method1("format", (&slf.locations,))?;
         Ok(s.to_object(py))
     }
 }
@@ -1048,7 +1048,7 @@ impl Bond {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
-        let s = PyString::new(py, "Bond({})").call_method1("format", (&slf.locations,))?;
+        let s = PyString::new(py, "Bond({!r})").call_method1("format", (&slf.locations,))?;
         Ok(s.to_object(py))
     }
 }
@@ -1079,7 +1079,7 @@ impl OneOf {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
-        let s = PyString::new(py, "OneOf({})").call_method1("format", (&slf.locations,))?;
+        let s = PyString::new(py, "OneOf({!r})").call_method1("format", (&slf.locations,))?;
         Ok(s.to_object(py))
     }
 }
@@ -1109,10 +1109,11 @@ impl External {
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
         let py = slf.py();
         let s = match &slf.location {
-            Some(s) => {
-                PyString::new(py, "External({}, {})").call_method1("format", (&slf.accession, s))?
+            Some(s) => PyString::new(py, "External({!r}, {!r})")
+                .call_method1("format", (&slf.accession, s))?,
+            None => {
+                PyString::new(py, "External({!r})").call_method1("format", (&slf.accession,))?
             }
-            None => PyString::new(py, "External({})").call_method1("format", (&slf.accession,))?,
         };
         Ok(s.to_object(py))
     }
