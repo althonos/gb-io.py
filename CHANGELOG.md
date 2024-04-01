@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.2...HEAD
+
+
+## [v0.3.2] - 2024-04-01
+[v0.3.2]: https://github.com/althonos/gb-io.py/compare/v0.3.1...v0.3.2
+
+### Fixed
+- `gb_io.dump` not extracting qualifiers from Python-created records ([#42](https://github.com/althonos/gb-io.py/issues/42)).
+- `Qualifier.__repr__` and various `__repr__` of `Location` subclasses not using `repr`-formatting.
 
 
 ## [v0.3.1] - 2024-03-28
