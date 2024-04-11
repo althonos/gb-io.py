@@ -450,9 +450,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-built"
-version = "0.4.7"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be6d574e0f8cab2cdd1eeeb640cbf845c974519fa9e9b62fa9c08ecece0ca5de"
+checksum = "35ee655adc94166665a1d714b439e27857dd199b947076891d6a17d32d396cde"
 
 [[package]]
 name = "pyo3-ffi"
