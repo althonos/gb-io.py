@@ -4,10 +4,9 @@ extern crate pyo3;
 
 use std::sync::Mutex;
 
+use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
-use pyo3::types::PyModule;
-use pyo3::Python;
 
 lazy_static::lazy_static! {
     pub static ref LOCK: Mutex<()> = Mutex::new(());
@@ -25,18 +24,18 @@ macro_rules! unittest {
                 let _l = LOCK.lock().unwrap();
                 Python::with_gil(|py| {
                     // create a Python module from our rust code with debug symbols
-                    let module = PyModule::new(py, "fastobo").unwrap();
+                    let module = PyModule::new_bound(py, "fastobo").unwrap();
                     gb_io_py::init(py, &module).unwrap();
-                    py.import("sys")
+                    py.import_bound("sys")
                         .unwrap()
                         .getattr("modules")
                         .unwrap()
                         .downcast::<PyDict>()
                         .unwrap()
-                        .set_item("gb_io", module)
+                        .set_item("gb_io", &module)
                         .unwrap();
                     // patch `sys.path` to locate tests from the project folder
-                    py.import("sys")
+                    py.import_bound("sys")
                         .unwrap()
                         .getattr("path")
                         .unwrap()
@@ -45,16 +44,16 @@ macro_rules! unittest {
                         .insert(0, env!("CARGO_MANIFEST_DIR"))
                         .unwrap();
                     // run tests with the unittest runner
-                    let kwargs = PyDict::new(py);
+                    let kwargs = PyDict::new_bound(py);
                     kwargs.set_item("verbosity", 2).unwrap();
                     kwargs.set_item("exit", false).unwrap();
                     let prog = py
-                        .import("unittest")
+                        .import_bound("unittest")
                         .unwrap()
                         .call_method(
                             "main",
                             (concat!("tests.", stringify!($name)),),
-                            Some(kwargs),
+                            Some(&kwargs),
                         )
                         .unwrap();
                     // check run was was successful

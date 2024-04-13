@@ -72,7 +72,7 @@ impl RecordReader {
         }
     }
 
-    pub fn from_handle(obj: &PyAny) -> PyResult<Self> {
+    pub fn from_handle(obj: Bound<PyAny>) -> PyResult<Self> {
         match PyFileGILRead::from_ref(obj).map(Handle::PyFile) {
             Ok(handle) => Self::new(SeqReader::new(handle)),
             Err(e) => Err(e),

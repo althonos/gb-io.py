@@ -43,7 +43,7 @@ pub enum PyFileRead<'p> {
 }
 
 impl<'p> PyFileRead<'p> {
-    pub fn from_ref(file: &'p PyAny) -> PyResult<Self> {
+    pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<Self> {
         let res = file.call_method1("read", (0,))?;
         if res.downcast::<PyBytes>().is_ok() {
             PyFileReadBin::new(file).map(Self::Binary)
@@ -72,12 +72,12 @@ impl<'p> Read for PyFileRead<'p> {
 
 #[derive(Debug, Clone)]
 pub struct PyFileReadBin<'p> {
-    file: &'p PyAny,
+    file: Bound<'p, PyAny>,
     readinto: bool,
 }
 
 impl<'p> PyFileReadBin<'p> {
-    pub fn new(file: &'p PyAny) -> PyResult<Self> {
+    pub fn new(file: Bound<'p, PyAny>) -> PyResult<Self> {
         #[cfg(feature = "cpython")]
         {
             file.hasattr("readinto")
@@ -157,12 +157,12 @@ impl<'p> Read for PyFileReadBin<'p> {
 
 #[derive(Debug, Clone)]
 pub struct PyFileReadText<'p> {
-    file: &'p PyAny,
+    file: Bound<'p, PyAny>,
     buffer: Vec<u8>,
 }
 
 impl<'p> PyFileReadText<'p> {
-    pub fn new(file: &'p PyAny) -> PyResult<Self> {
+    pub fn new(file: Bound<'p, PyAny>) -> PyResult<Self> {
         Ok(Self {
             file,
             buffer: Vec::new(),
@@ -221,7 +221,7 @@ pub enum PyFileGILRead {
 }
 
 impl PyFileGILRead {
-    pub fn from_ref(file: &PyAny) -> PyResult<PyFileGILRead> {
+    pub fn from_ref(file: Bound<PyAny>) -> PyResult<PyFileGILRead> {
         let py = file.py();
         let res = file.call_method1("read", (0,))?;
         if res.downcast::<PyBytes>().is_ok() {
@@ -279,7 +279,7 @@ impl PyFileGILReadBin {
 impl Read for PyFileGILReadBin {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         Python::with_gil(|py| {
-            let reference = self.file.as_ref(py);
+            let reference = self.file.bind(py).clone();
             let mut reader = PyFileReadBin {
                 file: reference,
                 readinto: self.readinto,
@@ -310,7 +310,7 @@ impl Read for PyFileGILReadText {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         Python::with_gil(|py| {
             // emulate a PyFileRead
-            let reference = self.file.as_ref(py);
+            let reference = self.file.bind(py).clone();
             let mut reader = PyFileReadText {
                 file: reference,
                 buffer: std::mem::take(&mut self.buffer),
@@ -334,14 +334,14 @@ pub enum PyFileWrite<'p> {
 }
 
 impl<'p> PyFileWrite<'p> {
-    pub fn from_ref(file: &'p PyAny) -> PyResult<Self> {
+    pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<Self> {
         // try writing bytes
-        let bytes = PyBytes::new(file.py(), b"");
+        let bytes = PyBytes::new_bound(file.py(), b"");
         if file.call_method1("write", (bytes,)).is_ok() {
             return PyFileWriteBin::new(file).map(Self::Binary);
         };
         // try writing strings
-        let s = PyString::new(file.py(), "");
+        let s = PyString::new_bound(file.py(), "");
         match file.call_method1("write", (s,)) {
             Ok(_) => PyFileWriteText::new(file).map(Self::Text),
             Err(e) => Err(e),
@@ -369,11 +369,11 @@ impl<'p> Write for PyFileWrite<'p> {
 
 #[derive(Debug, Clone)]
 pub struct PyFileWriteBin<'p> {
-    file: &'p PyAny,
+    file: Bound<'p, PyAny>,
 }
 
 impl<'p> PyFileWriteBin<'p> {
-    pub fn new(file: &'p PyAny) -> PyResult<Self> {
+    pub fn new(file: Bound<'p, PyAny>) -> PyResult<Self> {
         Ok(Self { file })
     }
 }
@@ -382,11 +382,11 @@ impl<'p> Write for PyFileWriteBin<'p> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
         // FIXME(@althonos): This is copying the buffer data into the bytes
         //                   first, ideally we could just pass a `memoryview`
-        let bytes = PyBytes::new(self.file.py(), buf);
+        let bytes = PyBytes::new_bound(self.file.py(), buf);
         match self.file.call_method1("write", (bytes,)) {
             Ok(obj) => {
                 // Check `fh.write` returned int, else raise a `TypeError`.
-                if let Ok(len) = usize::extract(obj) {
+                if let Ok(len) = obj.extract() {
                     Ok(len)
                 } else {
                     let ty = obj.get_type().name()?.to_string();
@@ -418,11 +418,11 @@ impl<'p> Write for PyFileWriteBin<'p> {
 
 #[derive(Debug, Clone)]
 pub struct PyFileWriteText<'p> {
-    file: &'p PyAny,
+    file: Bound<'p, PyAny>,
 }
 
 impl<'p> PyFileWriteText<'p> {
-    pub fn new(file: &'p PyAny) -> PyResult<Self> {
+    pub fn new(file: Bound<'p, PyAny>) -> PyResult<Self> {
         Ok(Self { file })
     }
 }
@@ -438,10 +438,10 @@ impl<'p> Write for PyFileWriteText<'p> {
             Ok(s) => s,
             Err(e) => return Err(IoError::new(IoErrorKind::InvalidData, e)), // Err(e) => return Err(PyUnicodeError::new_err(e.to_string())),
         };
-        let s = PyString::new(self.file.py(), decoded);
+        let s = PyString::new_bound(self.file.py(), decoded);
         match self.file.call_method1("write", (s,)) {
             Ok(obj) => {
-                if let Ok(len) = usize::extract(obj) {
+                if let Ok(len) = obj.extract() {
                     Ok(decoded[..len].as_bytes().len())
                 } else {
                     let ty = obj.get_type().name()?.to_string();

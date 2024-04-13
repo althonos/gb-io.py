@@ -146,11 +146,11 @@ impl Record {
         dblink: Option<String>,
         keywords: Option<String>,
         circular: bool,
-        date: Option<&'py PyDate>,
+        date: Option<Bound<'py, PyDate>>,
         source: Option<Py<Source>>,
         contig: Option<Py<Location>>,
-        references: Option<&'py PyAny>,
-        features: Option<&'py PyAny>,
+        references: Option<Bound<'py, PyAny>>,
+        features: Option<Bound<'py, PyAny>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let py = sequence.py();
         let mut record = Record::default();
@@ -477,7 +477,6 @@ impl Feature {
 
     #[setter]
     fn set_kind<'py>(mut slf: PyRefMut<'py, Self>, kind: Bound<'py, PyString>) {
-        let py = slf.py();
         slf.kind = Coa::Shared(kind.unbind());
     }
 
@@ -746,7 +745,7 @@ impl Convert for gb_io::seq::Location {
 
 impl Extract for gb_io::seq::Location {
     fn extract(py: Python, object: Py<Location>) -> PyResult<Self> {
-        let location = object.as_ref(py);
+        let location = object.bind(py);
         if let Ok(range) = location.extract::<Bound<Range>>() {
             let range = range.borrow();
             Ok(SeqLocation::Range(
@@ -948,7 +947,7 @@ impl Join {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty_bound(py);
-        for result in locations.as_ref(py).iter()? {
+        for result in locations.bind(py).iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -967,7 +966,7 @@ impl Join {
     fn get_start<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
         let py = slf.py();
         let mut min: Option<i32> = None;
-        for obj in slf.locations.as_ref(py) {
+        for obj in slf.locations.bind(py) {
             let start = obj.getattr("start")?.extract::<i32>()?;
             min = match min {
                 Some(i) if i < start => Some(i),
@@ -983,7 +982,7 @@ impl Join {
     fn get_end<'py>(slf: PyRef<'py, Self>) -> PyResult<i32> {
         let py = slf.py();
         let mut min: Option<i32> = None;
-        for obj in slf.locations.as_ref(py) {
+        for obj in slf.locations.bind(py) {
             let end = obj.getattr("end")?.extract::<i32>()?;
             min = match min {
                 Some(i) if i > end => Some(i),
@@ -1010,7 +1009,7 @@ impl Order {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty_bound(py);
-        for result in locations.as_ref(py).iter()? {
+        for result in locations.bind(py).iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1039,7 +1038,7 @@ impl Bond {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty_bound(py);
-        for result in locations.as_ref(py).iter()? {
+        for result in locations.bind(py).iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1069,7 +1068,7 @@ impl OneOf {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty_bound(py);
-        for result in locations.as_ref(py).iter()? {
+        for result in locations.bind(py).iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1191,7 +1190,7 @@ impl Convert for gb_io::seq::Reference {
 
 impl Extract for gb_io::seq::Reference {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let reference = object.as_ref(py).borrow();
+        let reference = object.bind(py).borrow();
         Ok(gb_io::seq::Reference {
             description: reference.description.clone(),
             authors: reference.authors.clone(),
@@ -1235,7 +1234,7 @@ impl Extract for gb_io::seq::Reference {
 ///
 #[pymodule]
 #[pyo3(name = "lib")]
-pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
+pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<self::Location>()?;
     m.add_class::<self::Range>()?;
     m.add_class::<self::Complement>()?;
@@ -1267,7 +1266,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     ///
     #[pyfn(m)]
     #[pyo3(name = "load", text_signature = "(fh)")]
-    fn load(py: Python, fh: &PyAny) -> PyResult<Py<PyList>> {
+    fn load(py: Python, fh: &Bound<PyAny>) -> PyResult<Py<PyList>> {
         // extract either a path or a file-handle from the arguments
         // let path: Option<String>;
         let stream: Box<dyn Read> = if let Ok(s) = fh.downcast::<PyString>() {
@@ -1287,7 +1286,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
             Box::new(bf)
         } else {
             // get a buffered reader by wrapping the given file handle
-            let bf = match PyFileRead::from_ref(fh) {
+            let bf = match PyFileRead::from_ref(fh.clone()) {
                 // Object is a binary file-handle: attempt to parse the
                 // document and return an `OboDoc` object.
                 Ok(f) => f,
@@ -1346,7 +1345,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     ///
     #[pyfn(m)]
     #[pyo3(name = "iter", text_signature = "(fh)")]
-    fn iter(py: Python, fh: &PyAny) -> PyResult<Py<RecordReader>> {
+    fn iter(py: Python, fh: Bound<PyAny>) -> PyResult<Py<RecordReader>> {
         let reader = match fh.downcast::<PyString>() {
             Ok(s) => RecordReader::from_path(s.to_str()?)?,
             Err(_) => RecordReader::from_handle(fh)?,
@@ -1375,8 +1374,8 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
     )]
     fn dump<'py>(
         py: Python<'py>,
-        records: &Bound<'py, PyAny>,
-        fh: &PyAny,
+        records: Bound<'py, PyAny>,
+        fh: Bound<'py, PyAny>,
         escape_locus: bool,
         truncate_locus: bool,
     ) -> PyResult<()> {
@@ -1421,7 +1420,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         let it = if let Ok(record) = records.extract::<Bound<'_, Record>>() {
             PyIterator::from_bound_object(&PyTuple::new_bound(py, [record]))?
         } else {
-            PyIterator::from_bound_object(records)?
+            PyIterator::from_bound_object(&records)?
         };
 
         // write sequences
