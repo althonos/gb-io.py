@@ -135,7 +135,7 @@ impl Record {
         features = None,
     ))]
     fn __new__<'py>(
-        sequence: &'py PyAny,
+        sequence: &Bound<'py, PyAny>,
         name: Option<String>,
         length: Option<usize>,
         molecule_type: Option<String>,
@@ -166,7 +166,9 @@ impl Record {
         record.date = date.map(Py::from).map(Coa::Shared);
         record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
         record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
-        record.sequence = PyByteArray::from(sequence).map(Py::from).map(Coa::Shared)?;
+        record.sequence = PyByteArray::from_bound(sequence)
+            .map(Py::from)
+            .map(Coa::Shared)?;
 
         if circular {
             record.topology = Topology::Circular;
@@ -175,7 +177,7 @@ impl Record {
             let feature_list = PyList::empty_bound(py);
             for result in features_iter.iter()? {
                 let object = result?;
-                object.downcast::<PyCell<Feature>>()?;
+                object.extract::<Bound<'py, Feature>>()?;
                 feature_list.append(object)?;
             }
             record.features = Coa::Shared(Py::from(feature_list));
@@ -184,7 +186,7 @@ impl Record {
             let reference_list = PyList::empty_bound(py);
             for result in reference_iter.iter()? {
                 let object = result?;
-                object.downcast::<PyCell<Reference>>()?;
+                object.extract::<Bound<Reference>>()?;
                 reference_list.append(object)?;
             }
             record.references = Coa::Shared(Py::from(reference_list));
@@ -222,9 +224,9 @@ impl Record {
     }
 
     #[setter]
-    fn set_date(mut slf: PyRefMut<'_, Self>, date: Option<&PyDate>) -> PyResult<()> {
+    fn set_date(mut slf: PyRefMut<'_, Self>, date: Option<Bound<PyDate>>) -> PyResult<()> {
         if let Some(dt) = date {
-            slf.date = Some(Coa::Shared(Py::from(dt)));
+            slf.date = Some(Coa::Shared(dt.unbind()));
         } else {
             slf.date = None;
         }
@@ -390,7 +392,7 @@ impl Convert for gb_io::seq::Source {
 
 impl Extract for gb_io::seq::Source {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let source = object.extract::<&PyCell<Source>>(py)?.borrow();
+        let source = object.extract::<Bound<Source>>(py)?.borrow();
         Ok(gb_io::seq::Source {
             source: source.name.clone(),
             organism: source.organism.clone(),
@@ -403,7 +405,10 @@ impl Extract for gb_io::seq::Source {
 impl Convert for gb_io::seq::Date {
     type Output = PyDate;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(PyDate::new(py, self.year() as i32, self.month() as u8, self.day() as u8)?.into())
+        Ok(
+            PyDate::new_bound(py, self.year() as i32, self.month() as u8, self.day() as u8)?
+                .unbind(),
+        )
     }
 }
 
@@ -471,8 +476,9 @@ impl Feature {
     }
 
     #[setter]
-    fn set_kind<'py>(mut slf: PyRefMut<'py, Self>, kind: &'py PyString) {
-        slf.kind = Coa::Shared(Py::from(kind));
+    fn set_kind<'py>(mut slf: PyRefMut<'py, Self>, kind: Bound<'py, PyString>) {
+        let py = slf.py();
+        slf.kind = Coa::Shared(kind.unbind());
     }
 
     /// `Location`: The location of the feature in the record.
@@ -556,9 +562,9 @@ pub struct Qualifier {
 impl Qualifier {
     #[new]
     #[pyo3(signature = (key, value = None))]
-    fn __new__(key: &PyString, value: Option<String>) -> PyClassInitializer<Self> {
+    fn __new__(key: Bound<PyString>, value: Option<String>) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Self {
-            key: Coa::Shared(Py::from(key)),
+            key: Coa::Shared(key.unbind()),
             value,
         })
     }
@@ -581,8 +587,8 @@ impl Qualifier {
     }
 
     #[setter]
-    fn set_key<'py>(mut slf: PyRefMut<'py, Self>, key: &'py PyString) {
-        slf.key = Coa::Shared(Py::from(key));
+    fn set_key<'py>(mut slf: PyRefMut<'py, Self>, key: Bound<'py, PyString>) {
+        slf.key = Coa::Shared(key.unbind());
     }
 }
 
@@ -682,7 +688,7 @@ impl Convert for gb_io::seq::Location {
                     .into_iter()
                     .map(|loc| loc.convert_with(py, interner))
                     .collect::<PyResult<Vec<Py<Location>>>>()
-                    .map(|objects| PyList::new(py, objects))
+                    .map(|objects| PyList::new_bound(py, objects))
                     .and_then(|list| list.to_object(py).extract(py))?;
                 Join::__new__(py, objects)
                     .and_then(|x| Py::new(py, x))
@@ -741,31 +747,31 @@ impl Convert for gb_io::seq::Location {
 impl Extract for gb_io::seq::Location {
     fn extract(py: Python, object: Py<Location>) -> PyResult<Self> {
         let location = object.as_ref(py);
-        if let Ok(range) = location.downcast::<PyCell<Range>>() {
+        if let Ok(range) = location.extract::<Bound<Range>>() {
             let range = range.borrow();
             Ok(SeqLocation::Range(
                 (range.start, gb_io::seq::Before(range.before)),
                 (range.end, gb_io::seq::After(range.after)),
             ))
-        } else if let Ok(between) = location.downcast::<PyCell<Between>>() {
+        } else if let Ok(between) = location.extract::<Bound<Between>>() {
             let between = between.borrow();
             Ok(SeqLocation::Between(between.start, between.end))
-        } else if let Ok(complement) = location.downcast::<PyCell<Complement>>() {
+        } else if let Ok(complement) = location.extract::<Bound<Complement>>() {
             let location = Extract::extract(py, complement.borrow().location.clone_ref(py))?;
             Ok(SeqLocation::Complement(Box::new(location)))
-        } else if let Ok(join) = location.downcast::<PyCell<Join>>() {
+        } else if let Ok(join) = location.extract::<Bound<Join>>() {
             let locations = Extract::extract(py, join.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::Join(locations))
-        } else if let Ok(order) = location.downcast::<PyCell<Order>>() {
+        } else if let Ok(order) = location.extract::<Bound<Order>>() {
             let locations = Extract::extract(py, order.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::Order(locations))
-        } else if let Ok(bond) = location.downcast::<PyCell<Bond>>() {
+        } else if let Ok(bond) = location.extract::<Bound<Bond>>() {
             let locations = Extract::extract(py, bond.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::Bond(locations))
-        } else if let Ok(one_of) = location.downcast::<PyCell<OneOf>>() {
+        } else if let Ok(one_of) = location.extract::<Bound<OneOf>>() {
             let locations = Extract::extract(py, one_of.borrow().locations.clone_ref(py))?;
             Ok(SeqLocation::OneOf(locations))
-        } else if let Ok(external) = location.downcast::<PyCell<External>>() {
+        } else if let Ok(external) = location.extract::<Bound<External>>() {
             let external = external.borrow();
             let location = external
                 .location
@@ -944,7 +950,7 @@ impl Join {
         let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
-            object.downcast::<PyCell<Location>>()?;
+            object.extract::<Bound<Location>>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -1006,7 +1012,7 @@ impl Order {
         let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
-            object.downcast::<PyCell<Location>>()?;
+            object.extract::<Bound<Location>>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -1035,7 +1041,7 @@ impl Bond {
         let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
-            object.downcast::<PyCell<Location>>()?;
+            object.extract::<Bound<Location>>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -1065,7 +1071,7 @@ impl OneOf {
         let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
-            object.downcast::<PyCell<Location>>()?;
+            object.extract::<Bound<Location>>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {

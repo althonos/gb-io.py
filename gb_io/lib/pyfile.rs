@@ -9,7 +9,6 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyString;
 use pyo3::types::PyType;
-use pyo3::FromPyPointer;
 
 // ---------------------------------------------------------------------------
 
@@ -100,7 +99,7 @@ impl<'p> Read for PyFileReadBin<'p> {
         if self.readinto {
             // prepare a `memoryview` to expose the buffer
             let memoryview = unsafe {
-                PyAny::from_owned_ptr(
+                Bound::from_owned_ptr(
                     self.file.py(),
                     pyo3::ffi::PyMemoryView_FromMemory(
                         buf.as_mut_ptr() as *mut libc::c_char,
