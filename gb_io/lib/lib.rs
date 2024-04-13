@@ -656,10 +656,10 @@ impl ToPyObject for Strand {
 }
 
 impl IntoPy<Py<PyString>> for Strand {
-    fn into_py(self, py: Python<'_>) -> Py<PyString> {
+    fn into_py(self, py: Python) -> Py<PyString> {
         match self {
-            Strand::Direct => pyo3::intern!(py, "+").into(),
-            Strand::Reverse => pyo3::intern!(py, "-").into(),
+            Strand::Direct => pyo3::intern!(py, "+").as_unbound().clone_ref(py),
+            Strand::Reverse => pyo3::intern!(py, "-").as_unbound().clone_ref(py),
         }
     }
 }
