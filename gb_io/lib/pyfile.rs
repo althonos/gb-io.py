@@ -73,21 +73,30 @@ impl<'p> Read for PyFileRead<'p> {
 #[derive(Debug, Clone)]
 pub struct PyFileReadBin<'p> {
     file: Bound<'p, PyAny>,
-    readinto: bool,
+    readinto: Option<Bound<'p, PyAny>>,
 }
 
 impl<'p> PyFileReadBin<'p> {
     pub fn new(file: Bound<'p, PyAny>) -> PyResult<Self> {
         #[cfg(feature = "cpython")]
         {
-            file.hasattr("readinto")
-                .map(|readinto| Self { file, readinto })
+            if file.hasattr("readinto")? {
+                Ok(Self {
+                    readinto: Some(file.getattr("readinto")?),
+                    file,
+                })
+            } else {
+                Ok(Self {
+                    file,
+                    readinto: None,
+                })
+            }
         }
         #[cfg(not(feature = "cpython"))]
         {
             Ok(Self {
                 file,
-                readinto: false,
+                readinto: None,
             })
         }
     }
@@ -96,7 +105,7 @@ impl<'p> PyFileReadBin<'p> {
 impl<'p> Read for PyFileReadBin<'p> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         // Try to use the zero-copy method if possible
-        if self.readinto {
+        if let Some(method) = &self.readinto {
             // prepare a `memoryview` to expose the buffer
             let memoryview = unsafe {
                 Bound::from_owned_ptr(
@@ -109,7 +118,7 @@ impl<'p> Read for PyFileReadBin<'p> {
                 )
             };
             // read directly into the `memoryview`
-            match self.file.call_method1("readinto", (memoryview,)) {
+            match method.call1((memoryview,)) {
                 Ok(obj) => {
                     if let Ok(n) = obj.extract::<usize>() {
                         Ok(n)
@@ -254,7 +263,7 @@ impl Read for PyFileGILRead {
 #[derive(Debug, Clone)]
 pub struct PyFileGILReadBin {
     file: PyObject,
-    readinto: bool,
+    readinto: Option<PyObject>,
 }
 
 impl PyFileGILReadBin {
@@ -262,15 +271,23 @@ impl PyFileGILReadBin {
     pub fn new(py: Python, file: PyObject) -> PyResult<Self> {
         #[cfg(feature = "cpython")]
         {
-            file.as_ref(py)
-                .hasattr("readinto")
-                .map(|readinto| Self { file, readinto })
+            if file.bind(py).hasattr("readinto")? {
+                Ok(Self {
+                    readinto: Some(file.bind(py).getattr("readinto")?.unbind()),
+                    file,
+                })
+            } else {
+                Ok(Self {
+                    file,
+                    readinto: None,
+                })
+            }
         }
         #[cfg(not(feature = "cpython"))]
         {
             Ok(Self {
                 file,
-                readinto: false,
+                readinto: None,
             })
         }
     }
@@ -282,7 +299,7 @@ impl Read for PyFileGILReadBin {
             let reference = self.file.bind(py).clone();
             let mut reader = PyFileReadBin {
                 file: reference,
-                readinto: self.readinto,
+                readinto: self.readinto.as_ref().map(|x| x.bind(py).clone()),
             };
             reader.read(buf)
         })
