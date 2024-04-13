@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.2...HEAD
 
 
+## [v0.3.3] - 2024-04-14
+[v0.3.3]: https://github.com/althonos/gb-io.py/compare/v0.3.2...v0.3.3
+
+### Changed
+- Bump `pyo3` dependency to `v0.21`.
+
+
 ## [v0.3.2] - 2024-04-01
 [v0.3.2]: https://github.com/althonos/gb-io.py/compare/v0.3.1...v0.3.2
 
