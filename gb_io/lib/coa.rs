@@ -6,7 +6,6 @@ use pyo3::pyclass::PyClass;
 use pyo3::types::PyByteArray;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
-use pyo3::PyNativeType;
 use pyo3::PyTypeInfo;
 
 #[derive(Debug, Default)]
@@ -26,7 +25,7 @@ impl PyInterner {
             return pystring.clone();
         }
         let mut cache = self.cache.write().expect("failed to acquire cache");
-        let pystring = Py::from(PyString::new(py, key));
+        let pystring = Py::from(PyString::new_bound(py, key));
         cache.insert(key.into(), pystring.clone());
         pystring
     }
@@ -48,14 +47,14 @@ impl<T: Convert> Convert for Vec<T> {
             .into_iter()
             .map(|elem| elem.convert_with(py, interner))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Py::from(PyList::new(py, converted)))
+        Ok(Py::from(PyList::new_bound(py, converted)))
     }
 }
 
 impl Convert for Vec<u8> {
     type Output = PyByteArray;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(Py::from(PyByteArray::new(py, self.as_slice())))
+        Ok(Py::from(PyByteArray::new_bound(py, self.as_slice())))
     }
 }
 
@@ -69,7 +68,7 @@ where
     Py<<T as Convert>::Output>: for<'py> FromPyObject<'py>,
 {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let list = object.as_ref(py);
+        let list = object.bind(py);
         list.into_iter()
             .map(|elem| T::extract(py, elem.extract()?))
             .collect()
@@ -78,7 +77,7 @@ where
 
 impl Extract for Vec<u8> {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        Ok(object.as_ref(py).to_vec())
+        Ok(object.bind(py).to_vec())
     }
 }
 

@@ -172,7 +172,7 @@ impl Record {
             record.topology = Topology::Circular;
         }
         if let Some(features_iter) = features {
-            let feature_list = PyList::empty(py);
+            let feature_list = PyList::empty_bound(py);
             for result in features_iter.iter()? {
                 let object = result?;
                 object.downcast::<PyCell<Feature>>()?;
@@ -181,7 +181,7 @@ impl Record {
             record.features = Coa::Shared(Py::from(feature_list));
         }
         if let Some(reference_iter) = references {
-            let reference_list = PyList::empty(py);
+            let reference_list = PyList::empty_bound(py);
             for result in reference_iter.iter()? {
                 let object = result?;
                 object.downcast::<PyCell<Reference>>()?;
@@ -298,7 +298,7 @@ impl Convert for gb_io::seq::Seq {
 
 impl Extract for gb_io::seq::Seq {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let record = object.as_ref(py).borrow();
+        let record = object.bind(py).borrow();
         Ok(gb_io::seq::Seq {
             name: record.name.clone(),
             topology: record.topology.clone(),
@@ -355,13 +355,13 @@ impl Source {
         PyClassInitializer::from(Self { name, organism })
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<&PyAny> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let name = &slf.name;
         if let Some(v) = &slf.organism {
-            PyString::new(py, "Source({!r}, {!r})").call_method1("format", (name, v))
+            PyString::new_bound(py, "Source({!r}, {!r})").call_method1("format", (name, v))
         } else {
-            PyString::new(py, "Source({!r})").call_method1("format", (name,))
+            PyString::new_bound(py, "Source({!r})").call_method1("format", (name,))
         }
     }
 }
@@ -449,16 +449,16 @@ impl Feature {
         })
     }
 
-    fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<&PyAny> {
+    fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let kind = slf.kind.to_shared(py)?;
         let location = slf.location.to_shared(py)?;
         let qualifiers = slf.qualifiers.to_shared(py)?;
-        if qualifiers.as_ref(py).is_empty() {
-            PyString::new(py, "Feature(kind={!r}, location={!r})")
+        if qualifiers.bind(py).is_empty() {
+            PyString::new_bound(py, "Feature(kind={!r}, location={!r})")
                 .call_method1("format", (kind, location))
         } else {
-            PyString::new(py, "Feature(kind={!r}, location={!r}, qualifiers={!r})")
+            PyString::new_bound(py, "Feature(kind={!r}, location={!r}, qualifiers={!r})")
                 .call_method1("format", (kind, location, qualifiers))
         }
     }
@@ -516,7 +516,7 @@ impl Convert for gb_io::seq::Feature {
 
 impl Extract for gb_io::seq::Feature {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let cell = object.as_ref(py);
+        let cell = object.bind(py);
         let feature = cell.borrow();
         Ok(gb_io::seq::Feature {
             kind: feature.kind.to_owned_native(py)?,
@@ -563,13 +563,13 @@ impl Qualifier {
         })
     }
 
-    fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<&PyAny> {
+    fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let key = slf.key.to_shared(py)?;
         if let Some(v) = &slf.value {
-            PyString::new(py, "Qualifier({!r}, {!r})").call_method1("format", (key, v))
+            PyString::new_bound(py, "Qualifier({!r}, {!r})").call_method1("format", (key, v))
         } else {
-            PyString::new(py, "Qualifier({!r})").call_method1("format", (key,))
+            PyString::new_bound(py, "Qualifier({!r})").call_method1("format", (key,))
         }
     }
 
@@ -615,7 +615,7 @@ impl Convert for (gb_io::QualifierKey, Option<String>) {
 
 impl Extract for (gb_io::QualifierKey, Option<String>) {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let py_cell = object.as_ref(py);
+        let py_cell = object.bind(py);
         let key = py_cell.borrow().key.to_owned_native(py)?;
         let value = py_cell.borrow().value.clone();
         Ok((key, value))
@@ -638,7 +638,7 @@ impl<'py> FromPyObject<'py> for Strand {
             "+" => Ok(Strand::Direct),
             "-" => Ok(Strand::Reverse),
             strand => Err(PyValueError::new_err(
-                PyString::new(py, "invalid strand: {!r}")
+                PyString::new_bound(py, "invalid strand: {!r}")
                     .call_method1("format", (strand,))?
                     .to_object(py),
             )),
@@ -892,11 +892,10 @@ impl Complement {
         PyClassInitializer::from(Location).add_subclass(Self { location })
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let s = PyString::new(py, "Complement({!r})")
-            .call_method1("format", (Py::clone_ref(&slf.location, py),))?;
-        Ok(s.to_object(py))
+        PyString::new_bound(py, "Complement({!r})")
+            .call_method1("format", (Py::clone_ref(&slf.location, py),))
     }
 
     #[getter]
@@ -942,7 +941,7 @@ pub struct Join {
 impl Join {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty(py);
+        let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
             object.downcast::<PyCell<Location>>()?;
@@ -953,10 +952,9 @@ impl Join {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let s = PyString::new(py, "Join({!r})").call_method1("format", (&slf.locations,))?;
-        Ok(s.to_object(py))
+        PyString::new_bound(py, "Join({!r})").call_method1("format", (&slf.locations,))
     }
 
     #[getter]
@@ -1005,7 +1003,7 @@ pub struct Order {
 impl Order {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty(py);
+        let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
             object.downcast::<PyCell<Location>>()?;
@@ -1016,10 +1014,9 @@ impl Order {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let s = PyString::new(py, "Order({!r})").call_method1("format", (&slf.locations,))?;
-        Ok(s.to_object(py))
+        PyString::new_bound(py, "Order({!r})").call_method1("format", (&slf.locations,))
     }
 }
 
@@ -1035,7 +1032,7 @@ pub struct Bond {
 impl Bond {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty(py);
+        let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
             object.downcast::<PyCell<Location>>()?;
@@ -1046,10 +1043,9 @@ impl Bond {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let s = PyString::new(py, "Bond({!r})").call_method1("format", (&slf.locations,))?;
-        Ok(s.to_object(py))
+        PyString::new_bound(py, "Bond({!r})").call_method1("format", (&slf.locations,))
     }
 }
 
@@ -1066,7 +1062,7 @@ pub struct OneOf {
 impl OneOf {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty(py);
+        let list = PyList::empty_bound(py);
         for result in locations.as_ref(py).iter()? {
             let object = result?;
             object.downcast::<PyCell<Location>>()?;
@@ -1077,10 +1073,9 @@ impl OneOf {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let s = PyString::new(py, "OneOf({!r})").call_method1("format", (&slf.locations,))?;
-        Ok(s.to_object(py))
+        PyString::new_bound(py, "OneOf({!r})").call_method1("format", (&slf.locations,))
     }
 }
 
@@ -1106,16 +1101,15 @@ impl External {
         })
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let s = match &slf.location {
-            Some(s) => PyString::new(py, "External({!r}, {!r})")
-                .call_method1("format", (&slf.accession, s))?,
+        match &slf.location {
+            Some(s) => PyString::new_bound(py, "External({!r}, {!r})")
+                .call_method1("format", (&slf.accession, s)),
             None => {
-                PyString::new(py, "External({!r})").call_method1("format", (&slf.accession,))?
+                PyString::new_bound(py, "External({!r})").call_method1("format", (&slf.accession,))
             }
-        };
-        Ok(s.to_object(py))
+        }
     }
 }
 
@@ -1308,7 +1302,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
 
         // parse all records
         let mut interner = PyInterner::default();
-        let records = PyList::empty(py);
+        let records = PyList::empty_bound(py);
         for result in reader {
             match result {
                 Ok(seq) => {
@@ -1331,7 +1325,7 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         }
 
         // return records
-        Ok(records.into_py(py))
+        Ok(records.unbind())
     }
 
     /// Iterate over the GenBank records in the given file or file handle.
@@ -1373,9 +1367,9 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         signature = (records, fh, escape_locus = false, truncate_locus = false),
         text_signature = "(records, fh, *, escape_locus=False, truncate_locus=False)"
     )]
-    fn dump(
-        py: Python,
-        records: &PyAny,
+    fn dump<'py>(
+        py: Python<'py>,
+        records: &Bound<'py, PyAny>,
         fh: &PyAny,
         escape_locus: bool,
         truncate_locus: bool,
@@ -1418,10 +1412,10 @@ pub fn init(py: Python, m: &PyModule) -> PyResult<()> {
         writer.escape_locus(escape_locus);
 
         // if a single record was given, wrap it in an iterable
-        let it = if let Ok(record) = records.extract::<Py<Record>>() {
-            PyIterator::from_object(PyTuple::new(py, [record]))?
+        let it = if let Ok(record) = records.extract::<Bound<'_, Record>>() {
+            PyIterator::from_bound_object(&PyTuple::new_bound(py, [record]))?
         } else {
-            PyIterator::from_object(records)?
+            PyIterator::from_bound_object(records)?
         };
 
         // write sequences
