@@ -99,9 +99,9 @@ import gb_io
 
 with open("tests/data/AY048670.1.faa", "w") as dst:
     for record in gb_io.iter("tests/data/AY048670.1.gb"):
-        for feature in filter(lambda feat: feat.type == "CDS", record.features):
-            qualifiers = feature.qualifiers.to_dict()
-            dst.write(">{}\n".format(qualifiers["locus_tag"][0]))
+        for feature in filter(lambda feat: feat.kind == "CDS", record.features):
+            qualifiers = {q.key:q.value for q in feature.qualifiers}
+            dst.write(">{}\n".format(qualifiers["protein_id"][0]))
             dst.write("{}\n".format(qualifiers["translation"][0]))
 ```
 
