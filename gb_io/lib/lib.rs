@@ -5,8 +5,8 @@ extern crate pyo3_built;
 
 mod built;
 mod coa;
-mod iter;
 mod pyfile;
+mod reader;
 
 use std::io::Read;
 use std::io::Write;
@@ -39,9 +39,9 @@ use self::coa::Convert;
 use self::coa::Extract;
 use self::coa::PyInterner;
 use self::coa::Temporary;
-use self::iter::RecordReader;
 use self::pyfile::PyFileRead;
 use self::pyfile::PyFileWrite;
+use self::reader::RecordReader;
 
 // ---------------------------------------------------------------------------
 
