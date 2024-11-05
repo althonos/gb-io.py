@@ -23,16 +23,16 @@ one is available, or from source after compiling the Rust code :
 	$ pip install --user gb-io
 
 
-.. Conda
-.. ^^^^^
+Conda
+^^^^^
 
-.. Pronto is also available as a `recipe <https://anaconda.org/bioconda/gb-io>`_
-.. in the `bioconda <https://bioconda.github.io/>`_ channel. To install, simply
-.. use the ``conda`` installer:
+`gb-io.py`` is also available as a `recipe <https://anaconda.org/bioconda/gb-io>`_
+in the `bioconda <https://bioconda.github.io/>`_ channel. To install, simply
+use the ``conda`` installer:
 
-.. .. code:: console
+.. code:: console
 
-..    $ conda install -c bioconda gb-io
+   $ conda install -c bioconda gb-io
 
 
 .. Arch User Repository
