@@ -58,8 +58,8 @@ Overview
 --------
 
 ``gb-io.py`` is a Python package that provides an interface to `gb-io`, a very
-fast GenBank format parser and serializer implemented in Rust. It can reach 
-much higher speed than the `Biopython <http://biopython.org/>`_ or
+fast GenBank format parser and serializer implemented in Rust by `David Leslie <https://github.com/dlesl>`_. 
+It can reach much higher speed than the `Biopython <http://biopython.org/>`_ or
 the `scikit-bio <http://scikit-bio.org/>`_ parsers.
 
 This library has no external dependency and is available for all modern Python
