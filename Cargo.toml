@@ -21,7 +21,8 @@ libc = "0.2.62"
 gb-io = "0.7.1"
 pyo3-built = "0.5.0"
 [dependencies.pyo3]
-version = "0.21.1"
+version = "0.23.0"
+features = ["py-clone"]
 
 [dev-dependencies]
 lazy_static = "1.4.0"

@@ -140,7 +140,7 @@ impl<'p> Read for PyFileReadBin<'p> {
             match self.file.call_method1("read", (buf.len(),)) {
                 Ok(obj) => {
                     // Check `fh.read` returned bytes, else raise a `TypeError`.
-                    if let Ok(bytes) = obj.extract::<&PyBytes>() {
+                    if let Ok(bytes) = obj.extract::<Bound<PyBytes>>() {
                         let b = bytes.as_bytes();
                         buf[..b.len()].copy_from_slice(b);
                         Ok(b.len())
@@ -190,7 +190,7 @@ impl<'p> Read for PyFileReadText<'p> {
         // read next chunk
         match self.file.call_method1("read", (buf.len(),)) {
             Ok(obj) => {
-                if let Ok(string) = obj.extract::<&PyString>() {
+                if let Ok(string) = obj.extract::<Bound<PyString>>() {
                     // get raw bytes from the Python string
                     let s = string.to_str()?;
                     let b = s.as_bytes();

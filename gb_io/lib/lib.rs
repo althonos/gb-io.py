@@ -414,7 +414,7 @@ impl Convert for gb_io::seq::Date {
 
 impl Extract for gb_io::seq::Date {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let date = object.extract::<&PyDate>(py)?;
+        let date = object.extract::<Bound<PyDate>>(py)?;
         Self::from_ymd(
             date.get_year(),
             date.get_month() as u32,
@@ -540,8 +540,8 @@ impl Convert for gb_io::seq::FeatureKind {
 
 impl Extract for gb_io::seq::FeatureKind {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let s = object.extract::<&PyString>(py)?.to_str()?;
-        Ok(gb_io::seq::FeatureKind::from(s))
+        let s = object.extract::<Bound<PyString>>(py)?;
+        Ok(gb_io::seq::FeatureKind::from(s.to_str()?))
     }
 }
 
@@ -600,8 +600,8 @@ impl Convert for gb_io::QualifierKey {
 
 impl Extract for gb_io::QualifierKey {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let s = object.extract::<&PyString>(py)?.to_str()?;
-        Ok(gb_io::QualifierKey::from(s))
+        let s = object.extract::<Bound<PyString>>(py)?;
+        Ok(gb_io::QualifierKey::from(s.to_str()?))
     }
 }
 
@@ -636,9 +636,9 @@ pub enum Strand {
 }
 
 impl<'py> FromPyObject<'py> for Strand {
-    fn extract(ob: &'py PyAny) -> PyResult<Self> {
+    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
-        let value = ob.extract::<&PyString>()?;
+        let value = ob.extract::<Bound<PyString>>()?;
         match value.to_str()? {
             "+" => Ok(Strand::Direct),
             "-" => Ok(Strand::Reverse),
@@ -1099,6 +1099,7 @@ pub struct External {
 #[pymethods]
 impl External {
     #[new]
+    #[pyo3(signature = (accession, location=None))]
     fn __new__(accession: String, location: Option<Py<Location>>) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Location).add_subclass(Self {
             accession,
@@ -1149,6 +1150,7 @@ pub struct Reference {
 #[pymethods]
 impl Reference {
     #[new]
+    #[pyo3(signature = (title, description, authors=None, consortium=None, journal=None, pubmed=None, remark=None))]
     fn __new__(
         title: String,
         description: String,

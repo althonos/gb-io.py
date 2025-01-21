@@ -120,7 +120,7 @@ impl<T> Temporary for Vec<T> {
 
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Coa<T: Convert> {
     Owned(T),
     Shared(Py<<T as Convert>::Output>),
@@ -135,6 +135,15 @@ impl<T: Convert + Temporary> Coa<T> {
                 *self = Coa::Shared(pyref.clone_ref(py));
                 Ok(pyref)
             }
+        }
+    }
+}
+
+impl<T: Convert + Temporary + Clone> Clone for Coa<T> {
+    fn clone(&self) -> Self {
+        match self {
+            Coa::Owned(c) => Coa::Owned(c.clone()),
+            Coa::Shared(t) => Coa::Shared(t.clone()),
         }
     }
 }
@@ -155,7 +164,7 @@ where
 impl<T> Coa<T>
 where
     T: Convert + Extract + Clone,
-    <T as Convert>::Output: PyTypeInfo + PyNativeType,
+    <T as Convert>::Output: PyTypeInfo,
 {
     pub fn to_owned_native(&self, py: Python) -> PyResult<T> {
         match self {
