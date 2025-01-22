@@ -6,7 +6,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.4...HEAD
+
+
+## [v0.3.4] - 2025-01-22
+[v0.3.4]: https://github.com/althonos/gb-io.py/compare/v0.3.3...v0.3.4
+
+### Added
+- Support for Python 3.13.
+
+### Changed
+- Bump `pyo3` dependency to `v0.23` and remove deprecated interface.
+- Bump `pyo3-built` dependency to `v0.6.0`.
+- Use `maturin` instead of `setuptools-rust` to build crate.
+- Use PyData Sphinx theme to render the documentation.
+
+### Fixed
+- Change working directory to access test data in `tests.test_doctest`.
 
 
 ## [v0.3.3] - 2024-04-14
