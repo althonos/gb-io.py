@@ -1,5 +1,1 @@
-setuptools >=41.0
-wheel
-setuptools-rust
-requests
-auditwheel
+maturin ~=1.2
