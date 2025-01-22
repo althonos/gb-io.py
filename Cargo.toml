@@ -4,10 +4,10 @@ version = "0.3.3"
 authors = ["Martin Larralde <martin.larralde@embl.de>"]
 edition = "2021"
 license = "MIT"
-build = "gb_io/lib/build.rs"
+build = "src/gb_io/lib/build.rs"
 
 [lib]
-path = "gb_io/lib/lib.rs"
+path = "src/gb_io/lib/lib.rs"
 crate-type = ["cdylib", "rlib"]
 name = "gb_io_py"
 doctest = false

@@ -48,12 +48,13 @@ classifiers = [
 [tool.maturin]
 manifest-path = "Cargo.toml"
 features = ["extension-module"]
+python-source = "src"
 module-name = "gb_io.lib"
 
 [tool.cibuildwheel]
 skip = ["*-musllinux_i686"]
 before-build = "pip install maturin"
-test-command = "cd {python -m unittest tests -v"
+test-command = "cd {package} && python -m unittest tests -v"
 build-verbosity = 1
 free-threaded-support = false
 
