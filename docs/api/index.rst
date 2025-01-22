@@ -9,14 +9,14 @@ API Reference
 .. toctree::
    :hidden:
 
-    functions <functions>
-    record <record>
-    feature <feature>
-    reference <reference>
-    source <source>
-    qualifier <qualifier>
-    location <location>
-    reader <reader>
+    Functions <functions>
+    Record <record>
+    Feature <feature>
+    Reference <reference>
+    Source <source>
+    Qualifier <qualifier>
+    Location <location>
+    Reader <reader>
 
 
 Functions
@@ -25,9 +25,9 @@ Functions
 .. autosummary::
     :nosignatures:
 
-    gb_io.load
-    gb_io.iter
-    gb_io.dump
+    load
+    iter
+    dump
 
 
 
@@ -40,11 +40,11 @@ Record
 .. autosummary::
     :nosignatures:
 
-    gb_io.Record
-    gb_io.Feature
-    gb_io.Reference
-    gb_io.Source
-    gb_io.Qualifier
+    Record
+    Feature
+    Reference
+    Source
+    Qualifier
 
 
 Locations
@@ -53,15 +53,15 @@ Locations
 .. autosummary::
     :nosignatures:
 
-    gb_io.Location
-    gb_io.Between
-    gb_io.Bond
-    gb_io.Complement
-    gb_io.External
-    gb_io.Join
-    gb_io.OneOf
-    gb_io.Order
-    gb_io.Range
+    Location
+    Between
+    Bond
+    Complement
+    External
+    Join
+    OneOf
+    Order
+    Range
 
 
 Reader
@@ -70,7 +70,7 @@ Reader
 .. autosummary::
     :nosignatures:
 
-    gb_io.RecordReader
+    RecordReader
 
 
 

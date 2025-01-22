@@ -70,7 +70,7 @@ Setup
 -----
 
 Run ``pip install gb-io`` in a shell to download the latest release from PyPI,
-or have a look at the :doc:`Installation page <install>` to find other ways 
+or have a look at the :doc:`Installation page <guide/install>` to find other ways 
 to install ``gb-io``.
 
 
@@ -80,10 +80,16 @@ Library
 .. toctree::
    :maxdepth: 2
 
-   Installation <install>
-   Contributing <contributing>
+   User Guide <guide/index>
    API Reference <api/index>
-   Changelog <changes>
+
+
+Related Projects
+----------------
+
+The following Python libraries may be of interest for bioinformaticians.
+
+.. include:: related.rst
 
 
 License
@@ -92,7 +98,7 @@ License
 This library is provided under the `MIT License <https://choosealicense.com/licenses/mit/>`_.
 The ``gb-io`` Rust crate package was written by `David Leslie <https://github.com/dlesl>`_
 and is licensed under the terms of the `MIT License <https://choosealicense.com/licenses/mit/>`_.
-This package vendors the source of several additional packages that are
+This package may vendor the source of several additional packages that are
 licensed under the `Apache-2.0 <https://choosealicense.com/licenses/apache-2.0/>`_,
 `MIT <https://choosealicense.com/licenses/mit/>`_ or
 `BSD-3-Clause <https://choosealicense.com/licenses/bsd-3-clause/>`_ licenses;

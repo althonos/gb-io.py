@@ -100,19 +100,19 @@ the repository and install the repository by running (with the admin rights):
     which may not even build, so consider using a versioned release instead.
 
 
-GitHub + ``setuptools``
-^^^^^^^^^^^^^^^^^^^^^^^
+GitHub + ``build``
+^^^^^^^^^^^^^^^^^^
 
 If you do not want to use ``pip``, you can still clone the repository and
-run the ``setup.py`` file manually, although you will need to install the
-build dependencies (mainly `Cython <https://pypi.org/project/cython>`_):
+run the ``build`` module, although you will need to install the
+build dependencies (mainly `maturin <https://pypi.org/project/maturin>`_):
 
 .. code:: console
 
    $ git clone --recursive https://github.com/althonos/gb-io.py
    $ cd gb-io.py
-   $ python setup.py build_ext
-   # python setup.py install
+   $ python -m build -n . -v
+   # python -m installer dist/*.whl
 
 .. Danger::
 
