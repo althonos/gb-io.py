@@ -8,6 +8,7 @@ mod coa;
 mod pyfile;
 mod reader;
 
+use std::convert::Infallible;
 use std::io::Read;
 use std::io::Write;
 use std::ops::DerefMut;
@@ -19,6 +20,7 @@ use gb_io::seq::Before;
 use gb_io::seq::Location as SeqLocation;
 use gb_io::seq::Topology;
 use gb_io::writer::SeqWriter;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyNotImplementedError;
 use pyo3::exceptions::PyOSError;
@@ -166,16 +168,14 @@ impl Record {
         record.date = date.map(Py::from).map(Coa::Shared);
         record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
         record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
-        record.sequence = PyByteArray::from_bound(sequence)
-            .map(Py::from)
-            .map(Coa::Shared)?;
+        record.sequence = PyByteArray::from(sequence).map(Py::from).map(Coa::Shared)?;
 
         if circular {
             record.topology = Topology::Circular;
         }
         if let Some(features_iter) = features {
-            let feature_list = PyList::empty_bound(py);
-            for result in features_iter.iter()? {
+            let feature_list = PyList::empty(py);
+            for result in features_iter.try_iter()? {
                 let object = result?;
                 object.extract::<Bound<'py, Feature>>()?;
                 feature_list.append(object)?;
@@ -183,8 +183,8 @@ impl Record {
             record.features = Coa::Shared(Py::from(feature_list));
         }
         if let Some(reference_iter) = references {
-            let reference_list = PyList::empty_bound(py);
-            for result in reference_iter.iter()? {
+            let reference_list = PyList::empty(py);
+            for result in reference_iter.try_iter()? {
                 let object = result?;
                 object.extract::<Bound<Reference>>()?;
                 reference_list.append(object)?;
@@ -218,7 +218,7 @@ impl Record {
     fn get_date(mut slf: PyRefMut<'_, Self>) -> PyResult<PyObject> {
         let py = slf.py();
         match &mut slf.deref_mut().date {
-            Some(date) => Ok(date.to_shared(py)?.to_object(py)),
+            Some(date) => date.to_shared(py)?.into_py_any(py),
             None => Ok(py.None()),
         }
     }
@@ -361,9 +361,9 @@ impl Source {
         let py = slf.py();
         let name = &slf.name;
         if let Some(v) = &slf.organism {
-            PyString::new_bound(py, "Source({!r}, {!r})").call_method1("format", (name, v))
+            PyString::new(py, "Source({!r}, {!r})").call_method1("format", (name, v))
         } else {
-            PyString::new_bound(py, "Source({!r})").call_method1("format", (name,))
+            PyString::new(py, "Source({!r})").call_method1("format", (name,))
         }
     }
 }
@@ -405,10 +405,7 @@ impl Extract for gb_io::seq::Source {
 impl Convert for gb_io::seq::Date {
     type Output = PyDate;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(
-            PyDate::new_bound(py, self.year() as i32, self.month() as u8, self.day() as u8)?
-                .unbind(),
-        )
+        Ok(PyDate::new(py, self.year() as i32, self.month() as u8, self.day() as u8)?.unbind())
     }
 }
 
@@ -460,10 +457,10 @@ impl Feature {
         let location = slf.location.to_shared(py)?;
         let qualifiers = slf.qualifiers.to_shared(py)?;
         if qualifiers.bind(py).is_empty() {
-            PyString::new_bound(py, "Feature(kind={!r}, location={!r})")
+            PyString::new(py, "Feature(kind={!r}, location={!r})")
                 .call_method1("format", (kind, location))
         } else {
-            PyString::new_bound(py, "Feature(kind={!r}, location={!r}, qualifiers={!r})")
+            PyString::new(py, "Feature(kind={!r}, location={!r}, qualifiers={!r})")
                 .call_method1("format", (kind, location, qualifiers))
         }
     }
@@ -572,9 +569,9 @@ impl Qualifier {
         let py = slf.py();
         let key = slf.key.to_shared(py)?;
         if let Some(v) = &slf.value {
-            PyString::new_bound(py, "Qualifier({!r}, {!r})").call_method1("format", (key, v))
+            PyString::new(py, "Qualifier({!r}, {!r})").call_method1("format", (key, v))
         } else {
-            PyString::new_bound(py, "Qualifier({!r})").call_method1("format", (key,))
+            PyString::new(py, "Qualifier({!r})").call_method1("format", (key,))
         }
     }
 
@@ -643,28 +640,22 @@ impl<'py> FromPyObject<'py> for Strand {
             "+" => Ok(Strand::Direct),
             "-" => Ok(Strand::Reverse),
             strand => Err(PyValueError::new_err(
-                PyString::new_bound(py, "invalid strand: {!r}")
+                PyString::new(py, "invalid strand: {!r}")
                     .call_method1("format", (strand,))?
-                    .to_object(py),
+                    .into_py_any(py)?,
             )),
         }
     }
 }
 
-impl ToPyObject for Strand {
-    fn to_object(&self, py: Python<'_>) -> PyObject {
+impl<'py> IntoPyObject<'py> for Strand {
+    type Target = PyString;
+    type Output = Bound<'py, PyString>;
+    type Error = Infallible;
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         match self {
-            Strand::Direct => pyo3::intern!(py, "+").to_object(py),
-            Strand::Reverse => pyo3::intern!(py, "-").to_object(py),
-        }
-    }
-}
-
-impl IntoPy<Py<PyString>> for Strand {
-    fn into_py(self, py: Python) -> Py<PyString> {
-        match self {
-            Strand::Direct => pyo3::intern!(py, "+").as_unbound().clone_ref(py),
-            Strand::Reverse => pyo3::intern!(py, "-").as_unbound().clone_ref(py),
+            Strand::Direct => Ok(pyo3::intern!(py, "+").clone()),
+            Strand::Reverse => Ok(pyo3::intern!(py, "-").clone()),
         }
     }
 }
@@ -687,11 +678,11 @@ impl Convert for gb_io::seq::Location {
                     .into_iter()
                     .map(|loc| loc.convert_with(py, interner))
                     .collect::<PyResult<Vec<Py<Location>>>>()
-                    .map(|objects| PyList::new_bound(py, objects))
-                    .and_then(|list| list.to_object(py).extract(py))?;
+                    .map(|objects| PyList::new(py, objects))
+                    .and_then(|list| list?.into_py_any(py)?.extract(py))?;
                 Join::__new__(py, objects)
                     .and_then(|x| Py::new(py, x))
-                    .and_then(|x| match x.to_object(py).extract::<Py<Location>>(py) {
+                    .and_then(|x| match x.into_py_any(py)?.extract::<Py<Location>>(py) {
                         Ok(pyref) => Ok(pyref.clone_ref(py)),
                         Err(e) => Err(PyErr::from(e)),
                     })
@@ -701,7 +692,7 @@ impl Convert for gb_io::seq::Location {
         match self {
             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
                 Py::new(py, Range::__new__(start, end, before, after)).and_then(|x| {
-                    match x.to_object(py).extract::<Py<Location>>(py) {
+                    match x.into_py_any(py)?.extract::<Py<Location>>(py) {
                         Ok(pyref) => Ok(pyref.clone_ref(py)),
                         Err(e) => Err(PyErr::from(e)),
                     }
@@ -709,7 +700,7 @@ impl Convert for gb_io::seq::Location {
             }
             SeqLocation::Between(start, end) => {
                 Py::new(py, Between::__new__(start, end)).and_then(|x| {
-                    match x.to_object(py).extract::<Py<Location>>(py) {
+                    match x.into_py_any(py)?.extract::<Py<Location>>(py) {
                         Ok(pyref) => Ok(pyref.clone_ref(py)),
                         Err(e) => Err(PyErr::from(e)),
                     }
@@ -718,7 +709,7 @@ impl Convert for gb_io::seq::Location {
             SeqLocation::Complement(inner_location) => (*inner_location)
                 .convert_with(py, interner)
                 .and_then(|inner| Py::new(py, Complement::__new__(inner)))
-                .and_then(|x| match x.to_object(py).extract::<Py<Location>>(py) {
+                .and_then(|x| match x.into_py_any(py)?.extract::<Py<Location>>(py) {
                     Ok(pyref) => Ok(pyref.clone_ref(py)),
                     Err(e) => Err(PyErr::from(e)),
                 }),
@@ -729,7 +720,7 @@ impl Convert for gb_io::seq::Location {
             SeqLocation::External(accession, location) => {
                 let loc = location.map(|x| x.convert_with(py, interner)).transpose()?;
                 Py::new(py, External::__new__(accession, loc)).and_then(|x| {
-                    match x.to_object(py).extract::<Py<Location>>(py) {
+                    match x.into_py_any(py)?.extract::<Py<Location>>(py) {
                         Ok(pyref) => Ok(pyref.clone_ref(py)),
                         Err(e) => Err(PyErr::from(e)),
                     }
@@ -844,8 +835,8 @@ impl Range {
     }
 
     #[getter]
-    fn get_strand(slf: PyRef<'_, Self>) -> Py<PyString> {
-        Strand::Direct.into_py(slf.py())
+    fn get_strand<'py>(slf: PyRef<'py, Self>) -> Bound<'py, PyString> {
+        Strand::Direct.into_pyobject(slf.py()).unwrap()
     }
 }
 
@@ -876,8 +867,8 @@ impl Between {
     }
 
     #[getter]
-    fn get_strand(slf: PyRef<'_, Self>) -> Py<PyString> {
-        Strand::Direct.into_py(slf.py())
+    fn get_strand<'py>(slf: PyRef<'py, Self>) -> Bound<'py, PyString> {
+        Strand::Direct.into_pyobject(slf.py()).unwrap()
     }
 }
 
@@ -899,7 +890,7 @@ impl Complement {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        PyString::new_bound(py, "Complement({!r})")
+        PyString::new(py, "Complement({!r})")
             .call_method1("format", (Py::clone_ref(&slf.location, py),))
     }
 
@@ -920,15 +911,17 @@ impl Complement {
     }
 
     #[getter]
-    fn get_strand(slf: PyRef<'_, Self>) -> PyResult<Py<PyString>> {
+    fn get_strand<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyString>> {
         let py = slf.py();
         match slf
             .location
             .getattr(py, "strand")
             .and_then(|start| start.extract(py))?
         {
-            Strand::Direct => Ok(Strand::Reverse.into_py(py)),
-            Strand::Reverse => Ok(Strand::Direct.into_py(py)),
+            Strand::Direct => Strand::Reverse
+                .into_pyobject(py)
+                .map_err(|_| unreachable!()),
+            Strand::Reverse => Strand::Direct.into_pyobject(py).map_err(|_| unreachable!()),
         }
     }
 }
@@ -946,8 +939,8 @@ pub struct Join {
 impl Join {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty_bound(py);
-        for result in locations.bind(py).iter()? {
+        let list = PyList::empty(py);
+        for result in locations.bind(py).try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -959,7 +952,7 @@ impl Join {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        PyString::new_bound(py, "Join({!r})").call_method1("format", (&slf.locations,))
+        PyString::new(py, "Join({!r})").call_method1("format", (&slf.locations,))
     }
 
     #[getter]
@@ -1008,8 +1001,8 @@ pub struct Order {
 impl Order {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty_bound(py);
-        for result in locations.bind(py).iter()? {
+        let list = PyList::empty(py);
+        for result in locations.bind(py).try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1021,7 +1014,7 @@ impl Order {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        PyString::new_bound(py, "Order({!r})").call_method1("format", (&slf.locations,))
+        PyString::new(py, "Order({!r})").call_method1("format", (&slf.locations,))
     }
 }
 
@@ -1037,8 +1030,8 @@ pub struct Bond {
 impl Bond {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty_bound(py);
-        for result in locations.bind(py).iter()? {
+        let list = PyList::empty(py);
+        for result in locations.bind(py).try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1050,7 +1043,7 @@ impl Bond {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        PyString::new_bound(py, "Bond({!r})").call_method1("format", (&slf.locations,))
+        PyString::new(py, "Bond({!r})").call_method1("format", (&slf.locations,))
     }
 }
 
@@ -1067,8 +1060,8 @@ pub struct OneOf {
 impl OneOf {
     #[new]
     fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
-        let list = PyList::empty_bound(py);
-        for result in locations.bind(py).iter()? {
+        let list = PyList::empty(py);
+        for result in locations.bind(py).try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1080,7 +1073,7 @@ impl OneOf {
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        PyString::new_bound(py, "OneOf({!r})").call_method1("format", (&slf.locations,))
+        PyString::new(py, "OneOf({!r})").call_method1("format", (&slf.locations,))
     }
 }
 
@@ -1110,11 +1103,9 @@ impl External {
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         match &slf.location {
-            Some(s) => PyString::new_bound(py, "External({!r}, {!r})")
+            Some(s) => PyString::new(py, "External({!r}, {!r})")
                 .call_method1("format", (&slf.accession, s)),
-            None => {
-                PyString::new_bound(py, "External({!r})").call_method1("format", (&slf.accession,))
-            }
+            None => PyString::new(py, "External({!r})").call_method1("format", (&slf.accession,)),
         }
     }
 }
@@ -1309,7 +1300,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
         // parse all records
         let mut interner = PyInterner::default();
-        let records = PyList::empty_bound(py);
+        let records = PyList::empty(py);
         for result in reader {
             match result {
                 Ok(seq) => {
@@ -1420,9 +1411,9 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
         // if a single record was given, wrap it in an iterable
         let it = if let Ok(record) = records.extract::<Bound<'_, Record>>() {
-            PyIterator::from_bound_object(&PyTuple::new_bound(py, [record]))?
+            PyIterator::from_object(&PyTuple::new(py, [record])?.into_py_any(py)?.bind(py))?
         } else {
-            PyIterator::from_bound_object(&records)?
+            PyIterator::from_object(&records)?
         };
 
         // write sequences

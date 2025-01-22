@@ -24,9 +24,9 @@ macro_rules! unittest {
                 let _l = LOCK.lock().unwrap();
                 Python::with_gil(|py| {
                     // create a Python module from our rust code with debug symbols
-                    let module = PyModule::new_bound(py, "fastobo").unwrap();
+                    let module = PyModule::new(py, "gb_io").unwrap();
                     gb_io_py::init(py, &module).unwrap();
-                    py.import_bound("sys")
+                    py.import("sys")
                         .unwrap()
                         .getattr("modules")
                         .unwrap()
@@ -35,7 +35,7 @@ macro_rules! unittest {
                         .set_item("gb_io", &module)
                         .unwrap();
                     // patch `sys.path` to locate tests from the project folder
-                    py.import_bound("sys")
+                    py.import("sys")
                         .unwrap()
                         .getattr("path")
                         .unwrap()
@@ -44,11 +44,11 @@ macro_rules! unittest {
                         .insert(0, env!("CARGO_MANIFEST_DIR"))
                         .unwrap();
                     // run tests with the unittest runner
-                    let kwargs = PyDict::new_bound(py);
+                    let kwargs = PyDict::new(py);
                     kwargs.set_item("verbosity", 2).unwrap();
                     kwargs.set_item("exit", false).unwrap();
                     let prog = py
-                        .import_bound("unittest")
+                        .import("unittest")
                         .unwrap()
                         .call_method(
                             "main",

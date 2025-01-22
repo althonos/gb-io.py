@@ -25,7 +25,7 @@ impl PyInterner {
             return pystring.clone();
         }
         let mut cache = self.cache.write().expect("failed to acquire cache");
-        let pystring = Py::from(PyString::new_bound(py, key));
+        let pystring = Py::from(PyString::new(py, key));
         cache.insert(key.into(), pystring.clone());
         pystring
     }
@@ -47,14 +47,14 @@ impl<T: Convert> Convert for Vec<T> {
             .into_iter()
             .map(|elem| elem.convert_with(py, interner))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Py::from(PyList::new_bound(py, converted)))
+        Ok(Py::from(PyList::new(py, converted)?))
     }
 }
 
 impl Convert for Vec<u8> {
     type Output = PyByteArray;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(Py::from(PyByteArray::new_bound(py, self.as_slice())))
+        Ok(Py::from(PyByteArray::new(py, self.as_slice())))
     }
 }
 

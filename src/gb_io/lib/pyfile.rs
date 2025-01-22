@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyString;
 use pyo3::types::PyType;
+use pyo3::IntoPyObjectExt;
 
 // ---------------------------------------------------------------------------
 
@@ -17,8 +18,8 @@ macro_rules! transmute_file_error {
     ($self:ident, $e:ident, $msg:expr, $py:expr) => {{
         // Attempt to transmute the Python OSError to an actual
         // Rust `std::io::Error` using `from_raw_os_error`.
-        if $e.is_instance_bound($py, &PyType::new_bound::<PyOSError>($py)) {
-            if let Ok(code) = &$e.value_bound($py).getattr("errno") {
+        if $e.is_instance($py, &PyType::new::<PyOSError>($py)) {
+            if let Ok(code) = &$e.value($py).getattr("errno") {
                 if let Ok(n) = code.extract::<i32>() {
                     return Err(IoError::from_raw_os_error(n));
                 }
@@ -234,10 +235,10 @@ impl PyFileGILRead {
         let py = file.py();
         let res = file.call_method1("read", (0,))?;
         if res.downcast::<PyBytes>().is_ok() {
-            let obj = file.into_py(py);
+            let obj = file.into_py_any(py)?;
             PyFileGILReadBin::new(py, obj).map(Self::Binary)
         } else if res.downcast::<PyString>().is_ok() {
-            let obj = file.into_py(py);
+            let obj = file.into_py_any(py)?;
             PyFileGILReadText::new(py, obj).map(Self::Text)
         } else {
             let ty = res.get_type().name()?.to_string();
@@ -353,12 +354,12 @@ pub enum PyFileWrite<'p> {
 impl<'p> PyFileWrite<'p> {
     pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<Self> {
         // try writing bytes
-        let bytes = PyBytes::new_bound(file.py(), b"");
+        let bytes = PyBytes::new(file.py(), b"");
         if file.call_method1("write", (bytes,)).is_ok() {
             return PyFileWriteBin::new(file).map(Self::Binary);
         };
         // try writing strings
-        let s = PyString::new_bound(file.py(), "");
+        let s = PyString::new(file.py(), "");
         match file.call_method1("write", (s,)) {
             Ok(_) => PyFileWriteText::new(file).map(Self::Text),
             Err(e) => Err(e),
@@ -399,7 +400,7 @@ impl<'p> Write for PyFileWriteBin<'p> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
         // FIXME(@althonos): This is copying the buffer data into the bytes
         //                   first, ideally we could just pass a `memoryview`
-        let bytes = PyBytes::new_bound(self.file.py(), buf);
+        let bytes = PyBytes::new(self.file.py(), buf);
         match self.file.call_method1("write", (bytes,)) {
             Ok(obj) => {
                 // Check `fh.write` returned int, else raise a `TypeError`.
@@ -455,7 +456,7 @@ impl<'p> Write for PyFileWriteText<'p> {
             Ok(s) => s,
             Err(e) => return Err(IoError::new(IoErrorKind::InvalidData, e)), // Err(e) => return Err(PyUnicodeError::new_err(e.to_string())),
         };
-        let s = PyString::new_bound(self.file.py(), decoded);
+        let s = PyString::new(self.file.py(), decoded);
         match self.file.call_method1("write", (s,)) {
             Ok(obj) => {
                 if let Ok(len) = obj.extract() {
