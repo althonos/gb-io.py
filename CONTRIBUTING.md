@@ -10,7 +10,7 @@ Tests are written as usual Python unit tests with the `unittest` module of
 the standard library. Running them requires the extension to be built locally:
 
 ```console
-$ python setup.py build_ext --inplace
+$ python -m pip install --no-build-isolation -e .
 $ python -m unittest discover -vv
 ```
 
