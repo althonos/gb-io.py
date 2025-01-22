@@ -1,7 +1,9 @@
-name: Python
+name: Package
+
 on:
-  - push
-  - pull_request
+  push:
+    tags:
+      - v*.*.*
 
 jobs:
 
