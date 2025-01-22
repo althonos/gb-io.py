@@ -13,6 +13,21 @@ import types
 
 import gb_io
 
+_cwd = None
+
+def setUp(test):
+    global _cwd
+    warnings.simplefilter('ignore')
+    _path = os.path.realpath(os.path.join(__file__, "..", ".."))
+    if _path != os.getcwd():
+        _cwd = os.getcwd()
+        os.chdir(_path)
+
+def tearDown(test):
+    warnings.simplefilter(warnings.defaultaction)
+    if _cwd is not None:
+        os.chdir(_cwd)
+
 
 def _load_tests_from_module(tests, module, globs, setUp=None, tearDown=None):
     """Load tests from module, iterating through submodules"""
@@ -43,13 +58,8 @@ def load_tests(loader, tests, ignore):
     }
 
     if not sys.argv[0].endswith('green'):
-        tests = _load_tests_from_module(tests, gb_io, globs)
+        tests = _load_tests_from_module(tests, gb_io, globs, setUp, tearDown)
     return tests
 
 
-def setUpModule():
-    warnings.simplefilter('ignore')
 
-
-def tearDownModule():
-    warnings.simplefilter(warnings.defaultaction)
