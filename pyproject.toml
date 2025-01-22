@@ -1,4 +1,68 @@
 [build-system]
-requires = ['setuptools', 'setuptools_rust']
-build-backend = "setuptools.build_meta"
+requires = ["maturin ~=1.2"]
+build-backend = "maturin"
 
+[project]
+name = "gb-io"
+dynamic = ["version"]
+description = "A Python interface to gb-io, a fast GenBank parser and serializer written in Rust."
+readme = "README.md"
+requires-python = ">=3.7"
+license = { file = "COPYING" }
+authors = [
+  { name = "Martin Larralde", email = "martin.larralde@embl.de" },
+]
+keywords = ["genbank", "parser", "sequence", "record"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/althonos/gb-io.py/"
+"Bug Tracker" = "https://github.com/althonos/gb-io.py/issues"
+"Changelog" = "https://github.com/althonos/gb-io.py/blob/master/CHANGELOG.md"
+"Coverage" = "https://codecov.io/gh/althonos/gb-io.py/"
+"Documentation" = "https://gb-io.readthedocs.io/"
+"Builds" = "https://github.com/althonos/gb-io.py/actions/"
+"PyPI" = "https://pypi.org/project/gb-io"
+"PiWheels" = "https://www.piwheels.org/project/gb-io/"
+
+[tool.maturin]
+manifest-path = "Cargo.toml"
+features = ["extension-module"]
+module-name = "gb_io.lib"
+
+[tool.cibuildwheel]
+skip = ["*-musllinux_i686"]
+before-build = "pip install maturin"
+test-command = "cd {python -m unittest tests -v"
+build-verbosity = 1
+free-threaded-support = false
+
+[tool.cibuildwheel.linux]
+environment = { PATH="$HOME/.cargo/bin:$PATH" }
+before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y"
+
+[tool.cibuildwheel.macos]
+before-all = [
+  "curl -sSf https://sh.rustup.rs | sh -s -- -y",
+  "rustup target add aarch64-apple-darwin"
+]
