@@ -7,28 +7,23 @@ on:
 
 jobs:
 
-  # wheel-linux-aarch64:
-  #   name: Build Linux wheels (Aarch64)
-  #   runs-on: ubuntu-latest
-  #   if: "startsWith(github.ref, 'refs/tags/v')"
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #   - name: Set up QEMU
-  #     id: qemu
-  #     uses: docker/setup-qemu-action@v3
-  #     with:
-  #       platforms: all
-  #   - name: Build manylinux wheels
-  #     uses: pypa/cibuildwheel@v2.21.3
-  #     env:
-  #       CIBW_ARCHS: aarch64
-  #       CIBW_BUILD: 'cp*-manylinux_aarch64'
-  #     with:
-  #       output-dir: dist
-  #   - uses: actions/upload-artifact@v4
-  #     with:
-  #       name: wheels-manylinux_aarch64
-  #       path: dist/*
+  wheel-linux-aarch64:
+    name: Build Linux wheels (Aarch64)
+    runs-on: ubuntu-22.04-arm
+    if: "startsWith(github.ref, 'refs/tags/v')"
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build manylinux wheels
+      uses: pypa/cibuildwheel@v2.21.3
+      env:
+        CIBW_ARCHS: aarch64
+        CIBW_BUILD: 'cp*-manylinux_aarch64'
+      with:
+        output-dir: dist
+    - uses: actions/upload-artifact@v4
+      with:
+        name: wheels-manylinux_aarch64
+        path: dist/*
 
   wheel-linux-x86_64:
     name: Build Linux wheels (x86-64)
@@ -137,7 +132,7 @@ jobs:
       id-token: write
     needs:
     - sdist
-    # - wheel-linux-aarch64
+    - wheel-linux-aarch64
     - wheel-linux-x86_64
     - wheel-macos-aarch64
     - wheel-macos-x86_64
