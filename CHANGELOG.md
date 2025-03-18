@@ -6,7 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.5...HEAD
+
+
+## [v0.3.5] - 2025-03-18
+[v0.3.5]: https://github.com/althonos/gb-io.py/compare/v0.3.4...v0.3.5
+
+### Changed
+- Bump `gb-io` dependency to `v0.8.0`.
 
 
 ## [v0.3.4] - 2025-01-22
