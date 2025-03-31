@@ -21,7 +21,7 @@ libc = "0.2.62"
 gb-io = "0.8.0"
 pyo3-built = "0.6.0"
 [dependencies.pyo3]
-version = "0.23.0"
+version = "0.24.1"
 features = ["py-clone"]
 
 [dev-dependencies]
