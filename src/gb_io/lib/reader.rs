@@ -20,7 +20,7 @@ use super::Record;
 
 /// An enum providing `Read` for either Python file-handles or filesystem files.
 pub enum Handle {
-    FsFile(File, PathBuf),
+    FsFile(File),
     PyFile(PyFileGILRead),
 }
 
@@ -28,14 +28,14 @@ impl TryFrom<PathBuf> for Handle {
     type Error = std::io::Error;
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
         let file = File::open(&p)?;
-        Ok(Handle::FsFile(file, p))
+        Ok(Handle::FsFile(file))
     }
 }
 
 impl Read for Handle {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         match self {
-            Handle::FsFile(f, _) => f.read(buf),
+            Handle::FsFile(f) => f.read(buf),
             Handle::PyFile(f) => f.read(buf),
         }
     }
