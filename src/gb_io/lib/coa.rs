@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -7,6 +8,9 @@ use pyo3::types::PyByteArray;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::PyTypeInfo;
+
+use super::FeatureKind;
+use super::QualifierKey;
 
 #[derive(Debug, Default)]
 pub struct PyInterner {
@@ -94,15 +98,15 @@ impl Temporary for gb_io::seq::Date {
     }
 }
 
-impl Temporary for gb_io::QualifierKey {
+impl Temporary for QualifierKey {
     fn temporary() -> Self {
-        gb_io::QualifierKey::from("gene")
+        QualifierKey(Cow::Borrowed("gene"))
     }
 }
 
-impl Temporary for gb_io::FeatureKind {
+impl Temporary for FeatureKind {
     fn temporary() -> Self {
-        gb_io::FeatureKind::from("locus_tag")
+        FeatureKind(Cow::Borrowed("locus_tag"))
     }
 }
 

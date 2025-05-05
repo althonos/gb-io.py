@@ -8,6 +8,7 @@ mod coa;
 mod pyfile;
 mod reader;
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::io::Read;
 use std::io::Write;
@@ -427,9 +428,9 @@ impl Extract for gb_io::seq::Date {
 #[pyclass(module = "gb_io")]
 #[derive(Debug, Clone)]
 pub struct Feature {
-    kind: Coa<gb_io::seq::FeatureKind>,
+    kind: Coa<FeatureKind>,
     location: Coa<gb_io::seq::Location>,
-    qualifiers: Coa<Vec<(gb_io::QualifierKey, Option<String>)>>,
+    qualifiers: Coa<Vec<(QualifierKey, Option<String>)>>,
 }
 
 #[pymethods]
@@ -508,9 +509,14 @@ impl Convert for gb_io::seq::Feature {
         Py::new(
             py,
             Feature {
-                kind: self.kind.into(),
+                kind: Coa::from(FeatureKind(self.kind)),
                 location: self.location.into(),
-                qualifiers: self.qualifiers.into(),
+                qualifiers: self
+                    .qualifiers
+                    .into_iter()
+                    .map(|(x, y)| (QualifierKey(x), y))
+                    .collect::<Vec<_>>()
+                    .into(),
             },
         )
     }
@@ -521,24 +527,32 @@ impl Extract for gb_io::seq::Feature {
         let cell = object.bind(py);
         let feature = cell.borrow();
         Ok(gb_io::seq::Feature {
-            kind: feature.kind.to_owned_native(py)?,
+            kind: feature.kind.to_owned_native(py)?.0,
             location: feature.location.to_owned_class(py)?,
-            qualifiers: feature.qualifiers.to_owned_native(py)?,
+            qualifiers: feature
+                .qualifiers
+                .to_owned_native(py)?
+                .into_iter()
+                .map(|(x, y)| (x.0, y))
+                .collect(),
         })
     }
 }
 
-impl Convert for gb_io::seq::FeatureKind {
+#[derive(Debug, Clone)]
+struct FeatureKind(Cow<'static, str>);
+
+impl Convert for FeatureKind {
     type Output = PyString;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(interner.intern(py, self.as_ref()))
+        Ok(interner.intern(py, self.0.as_ref()))
     }
 }
 
-impl Extract for gb_io::seq::FeatureKind {
+impl Extract for FeatureKind {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
         let s = object.extract::<Bound<PyString>>(py)?;
-        Ok(gb_io::seq::FeatureKind::from(s.to_str()?))
+        Ok(FeatureKind(Cow::from(s.to_str()?.to_owned())))
     }
 }
 
@@ -548,7 +562,7 @@ impl Extract for gb_io::seq::FeatureKind {
 #[pyclass(module = "gb_io")]
 #[derive(Debug)]
 pub struct Qualifier {
-    key: Coa<gb_io::QualifierKey>,
+    key: Coa<QualifierKey>,
     /// `str` or `None`: An optional value for the qualifier.
     #[pyo3(get, set)]
     value: Option<String>,
@@ -588,21 +602,24 @@ impl Qualifier {
     }
 }
 
-impl Convert for gb_io::QualifierKey {
+#[derive(Debug, Clone)]
+struct QualifierKey(Cow<'static, str>);
+
+impl Convert for QualifierKey {
     type Output = PyString;
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(interner.intern(py, self))
+        Ok(interner.intern(py, self.0))
     }
 }
 
-impl Extract for gb_io::QualifierKey {
+impl Extract for QualifierKey {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
         let s = object.extract::<Bound<PyString>>(py)?;
-        Ok(gb_io::QualifierKey::from(s.to_str()?))
+        Ok(QualifierKey(Cow::from(s.to_str()?.to_owned())))
     }
 }
 
-impl Convert for (gb_io::QualifierKey, Option<String>) {
+impl Convert for (QualifierKey, Option<String>) {
     type Output = Qualifier;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         Py::new(
@@ -615,7 +632,7 @@ impl Convert for (gb_io::QualifierKey, Option<String>) {
     }
 }
 
-impl Extract for (gb_io::QualifierKey, Option<String>) {
+impl Extract for (QualifierKey, Option<String>) {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
         let py_cell = object.bind(py);
         let key = py_cell.borrow().key.to_owned_native(py)?;
