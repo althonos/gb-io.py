@@ -6,11 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.7...HEAD
+
+## [v0.3.7] - 2025-10-11
+[v0.3.7]: https://github.com/althonos/gb-io.py/compare/v0.3.6...v0.3.7
+
+### Changed
+- Bump `pyo3` dependency to `v0.24` for Python 3.14 compatibility ([#64](https://github.com/althonos/gb-io.py/pull/64), by [@refack](https://github.com/refack)).
+- Build wheels in Limited API for the Python 3.7 ABI.
 
 
 ## [v0.3.6] - 2025-05-05
-[v0.3.5]: https://github.com/althonos/gb-io.py/compare/v0.3.5...v0.3.6
+[v0.3.6]: https://github.com/althonos/gb-io.py/compare/v0.3.5...v0.3.6
 
 ### Changed
 - Bump `gb-io` dependency to `v0.9.0`.
