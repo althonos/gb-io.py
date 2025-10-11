@@ -91,10 +91,10 @@ impl RecordReader {
         match slf.reader.next() {
             None => Ok(None),
             Some(Ok(seq)) => {
-                Python::with_gil(|py| Ok(Some(seq.convert_with(py, &mut slf.interner)?)))
+                Python::attach(|py| Ok(Some(seq.convert_with(py, &mut slf.interner)?)))
             }
             Some(Err(e)) => {
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     if PyErr::occurred(py) {
                         Err(PyErr::fetch(py))
                     } else {

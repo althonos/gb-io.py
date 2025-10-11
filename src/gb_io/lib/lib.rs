@@ -226,7 +226,7 @@ impl Record {
 
     /// `~datetime.date` or `None`: The date this record was submitted.
     #[getter]
-    fn get_date(mut slf: PyRefMut<'_, Self>) -> PyResult<PyObject> {
+    fn get_date(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         match &mut slf.deref_mut().date {
             Some(date) => {
@@ -242,7 +242,6 @@ impl Record {
         mut slf: PyRefMut<'py, Self>,
         date: Option<Bound<'py, PyAny>>,
     ) -> PyResult<()> {
-        let py = slf.py();
         if let Some(dt) = date {
             let year = dt.getattr("year")?.extract::<i32>()?;
             let month = dt.getattr("month")?.extract::<u32>()?;
@@ -691,7 +690,7 @@ impl Convert for gb_io::seq::Location {
     fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
-                let objects: PyObject = $inner
+                let objects: Py<PyAny> = $inner
                     .into_iter()
                     .map(|loc| loc.convert_with(py, interner))
                     .collect::<PyResult<Vec<Py<Location>>>>()
@@ -955,7 +954,7 @@ pub struct Join {
 #[pymethods]
 impl Join {
     #[new]
-    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty(py);
         for result in locations.bind(py).try_iter()? {
             let object = result?;
@@ -1017,7 +1016,7 @@ pub struct Order {
 #[pymethods]
 impl Order {
     #[new]
-    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty(py);
         for result in locations.bind(py).try_iter()? {
             let object = result?;
@@ -1046,7 +1045,7 @@ pub struct Bond {
 #[pymethods]
 impl Bond {
     #[new]
-    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty(py);
         for result in locations.bind(py).try_iter()? {
             let object = result?;
@@ -1076,7 +1075,7 @@ pub struct OneOf {
 #[pymethods]
 impl OneOf {
     #[new]
-    fn __new__(py: Python, locations: PyObject) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
         let list = PyList::empty(py);
         for result in locations.bind(py).try_iter()? {
             let object = result?;

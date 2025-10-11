@@ -17,12 +17,12 @@ macro_rules! unittest {
         #[test]
         fn $name() {
             // initialize
-            pyo3::prepare_freethreaded_python();
+            Python::initialize();
 
             // acquire Python only one test at a time
             let success = {
                 let _l = LOCK.lock().unwrap();
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     // create a Python module from our rust code with debug symbols
                     let module = PyModule::new(py, "gb_io").unwrap();
                     gb_io_py::init(py, &module).unwrap();

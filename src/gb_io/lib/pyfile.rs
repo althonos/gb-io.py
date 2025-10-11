@@ -264,13 +264,13 @@ impl Read for PyFileGILRead {
 
 #[derive(Debug, Clone)]
 pub struct PyFileGILReadBin {
-    file: PyObject,
-    readinto: Option<PyObject>,
+    file: Py<PyAny>,
+    readinto: Option<Py<PyAny>>,
 }
 
 impl PyFileGILReadBin {
     #[allow(unused_variables)]
-    pub fn new(py: Python, file: PyObject) -> PyResult<Self> {
+    pub fn new(py: Python, file: Py<PyAny>) -> PyResult<Self> {
         #[cfg(feature = "cpython")]
         {
             if file.bind(py).hasattr("readinto")? {
@@ -297,7 +297,7 @@ impl PyFileGILReadBin {
 
 impl Read for PyFileGILReadBin {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let reference = self.file.bind(py).clone();
             let mut reader = PyFileReadBin {
                 file: reference,
@@ -312,12 +312,12 @@ impl Read for PyFileGILReadBin {
 
 #[derive(Debug, Clone)]
 pub struct PyFileGILReadText {
-    file: PyObject,
+    file: Py<PyAny>,
     buffer: Vec<u8>,
 }
 
 impl PyFileGILReadText {
-    pub fn new(_py: Python, file: PyObject) -> PyResult<Self> {
+    pub fn new(_py: Python, file: Py<PyAny>) -> PyResult<Self> {
         Ok(Self {
             file,
             buffer: Vec::new(),
@@ -327,7 +327,7 @@ impl PyFileGILReadText {
 
 impl Read for PyFileGILReadText {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // emulate a PyFileRead
             let reference = self.file.bind(py).clone();
             let mut reader = PyFileReadText {
