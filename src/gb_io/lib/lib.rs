@@ -30,10 +30,11 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyByteArray;
 use pyo3::types::PyDate;
-use pyo3::types::PyDateAccess;
+// use pyo3::types::PyDateAccess;
 use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
+use pyo3::types::PyStringMethods;
 use pyo3::types::PyTuple;
 use pyo3_built::pyo3_built;
 
@@ -149,7 +150,7 @@ impl Record {
         dblink: Option<String>,
         keywords: Option<String>,
         circular: bool,
-        date: Option<Bound<'py, PyDate>>,
+        date: Option<Py<Date>>,
         source: Option<Py<Source>>,
         contig: Option<Py<Location>>,
         references: Option<Bound<'py, PyAny>>,
@@ -166,7 +167,7 @@ impl Record {
         record.version = version;
         record.dblink = dblink;
         record.keywords = keywords;
-        record.date = date.map(Py::from).map(Coa::Shared);
+        record.date = date.map(|d| Coa::Shared(d.clone_ref(py)));
         record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
         record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
         record.sequence = PyByteArray::from(sequence).map(Py::from).map(Coa::Shared)?;
@@ -225,9 +226,9 @@ impl Record {
     }
 
     #[setter]
-    fn set_date(mut slf: PyRefMut<'_, Self>, date: Option<Bound<PyDate>>) -> PyResult<()> {
+    fn set_date(mut slf: PyRefMut<'_, Self>, date: Option<Py<Date>>) -> PyResult<()> {
         if let Some(dt) = date {
-            slf.date = Some(Coa::Shared(dt.unbind()));
+            slf.date = Some(Coa::Shared(dt));
         } else {
             slf.date = None;
         }
@@ -403,22 +404,54 @@ impl Extract for gb_io::seq::Source {
 
 // ---------------------------------------------------------------------------
 
+#[pyclass(module = "gb_io")]
+#[derive(Debug, Default)]
+pub struct Date {
+    #[pyo3(get, set)]
+    year: i32,
+    #[pyo3(get, set)]
+    month: u8,
+    #[pyo3(get, set)]
+    day: u8,
+}
+
+#[pymethods]
+impl Date {
+    #[new]
+    #[pyo3(signature = (year, month, day))]
+    fn __new__(year: i32, month: u8, day: u8) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Self { year, month, day })
+    }
+
+    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyString>> {
+        let py = slf.py();
+        Ok(PyString::new(
+            py,
+            &format!("Date({}, {}, {})", slf.year, slf.month, slf.day),
+        ))
+    }
+}
+
 impl Convert for gb_io::seq::Date {
-    type Output = PyDate;
+    type Output = Date;
     fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(PyDate::new(py, self.year() as i32, self.month() as u8, self.day() as u8)?.unbind())
+        Py::new(
+            py,
+            Date {
+                year: self.year(),
+                month: self.month() as u8,
+                day: self.day() as u8,
+            },
+        )
     }
 }
 
 impl Extract for gb_io::seq::Date {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let date = object.extract::<Bound<PyDate>>(py)?;
-        Self::from_ymd(
-            date.get_year(),
-            date.get_month() as u32,
-            date.get_day() as u32,
-        )
-        .map_err(|_| PyValueError::new_err("invalid date"))
+        let cell = object.bind(py);
+        let date = cell.borrow();
+        Self::from_ymd(date.year, date.month as u32, date.day as u32)
+            .map_err(|_| PyValueError::new_err("invalid date"))
     }
 }
 
@@ -552,7 +585,7 @@ impl Convert for FeatureKind {
 impl Extract for FeatureKind {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
         let s = object.extract::<Bound<PyString>>(py)?;
-        Ok(FeatureKind(Cow::from(s.to_str()?.to_owned())))
+        Ok(FeatureKind(Cow::from(s.to_cow()?.into_owned())))
     }
 }
 
@@ -615,7 +648,7 @@ impl Convert for QualifierKey {
 impl Extract for QualifierKey {
     fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
         let s = object.extract::<Bound<PyString>>(py)?;
-        Ok(QualifierKey(Cow::from(s.to_str()?.to_owned())))
+        Ok(QualifierKey(Cow::from(s.to_cow()?.into_owned())))
     }
 }
 
@@ -653,14 +686,16 @@ impl<'py> FromPyObject<'py> for Strand {
     fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
         let value = ob.extract::<Bound<PyString>>()?;
-        match value.to_str()? {
-            "+" => Ok(Strand::Direct),
-            "-" => Ok(Strand::Reverse),
-            strand => Err(PyValueError::new_err(
+        if value == "+" {
+            Ok(Strand::Direct)
+        } else if value == "-" {
+            Ok(Strand::Reverse)
+        } else {
+            Err(PyValueError::new_err(
                 PyString::new(py, "invalid strand: {!r}")
-                    .call_method1("format", (strand,))?
+                    .call_method1("format", (value,))?
                     .into_py_any(py)?,
-            )),
+            ))
         }
     }
 }
@@ -1260,6 +1295,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<self::RecordReader>()?;
     m.add_class::<self::Reference>()?;
     m.add_class::<self::Source>()?;
+    m.add_class::<self::Date>()?;
     m.add("__package__", "gb_io")?;
     m.add("__build__", pyo3_built!(py, built))?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
@@ -1281,7 +1317,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         // let path: Option<String>;
         let stream: Box<dyn Read> = if let Ok(s) = fh.downcast::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
-            let bf = match std::fs::File::open(s.to_str()?) {
+            let bf = match std::fs::File::open(s.to_cow()?.as_ref()) {
                 Ok(f) => f,
                 Err(e) => {
                     return match e.raw_os_error() {
@@ -1357,7 +1393,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     #[pyo3(name = "iter", text_signature = "(fh)")]
     fn iter(py: Python, fh: Bound<PyAny>) -> PyResult<Py<RecordReader>> {
         let reader = match fh.downcast::<PyString>() {
-            Ok(s) => RecordReader::from_path(s.to_str()?)?,
+            Ok(s) => RecordReader::from_path(s.to_cow()?.as_ref())?,
             Err(_) => RecordReader::from_handle(fh)?,
         };
         Py::new(py, reader)
@@ -1392,7 +1428,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         // extract either a path or a file-handle from the arguments
         let stream: Box<dyn Write> = if let Ok(s) = fh.downcast::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
-            let bf = match std::fs::File::create(s.to_str()?) {
+            let bf = match std::fs::File::create(s.to_cow()?.as_ref()) {
                 Ok(f) => f,
                 Err(e) => {
                     return match e.raw_os_error() {

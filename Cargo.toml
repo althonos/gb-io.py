@@ -28,7 +28,8 @@ features = ["py-clone"]
 lazy_static = "1.4.0"
 
 [features]
-default = []
+default = ["abi3"]
 cpython = []
 extension-module = ["pyo3/extension-module"]
 nightly = ["pyo3/nightly"]
+abi3 = ["pyo3/abi3-py37"]

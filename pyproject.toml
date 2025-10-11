@@ -48,7 +48,7 @@ classifiers = [
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
-features = ["extension-module"]
+features = ["extension-module", "abi3"]
 python-source = "src"
 module-name = "gb_io.lib"
 

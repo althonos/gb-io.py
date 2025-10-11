@@ -114,7 +114,8 @@ impl<'p> Read for PyFileReadBin<'p> {
                     pyo3::ffi::PyMemoryView_FromMemory(
                         buf.as_mut_ptr() as *mut libc::c_char,
                         buf.len() as isize,
-                        pyo3::ffi::PyBUF_WRITE,
+                        // pyo3::ffi::PyBUF_WRITE,
+                        0x200,
                     ),
                 )
             };
@@ -193,7 +194,7 @@ impl<'p> Read for PyFileReadText<'p> {
             Ok(obj) => {
                 if let Ok(string) = obj.extract::<Bound<PyString>>() {
                     // get raw bytes from the Python string
-                    let s = string.to_str()?;
+                    let s = string.to_cow()?;
                     let b = s.as_bytes();
                     // copy bytes, if needed cache extra bytes
                     if b.len() <= buf.len() {
