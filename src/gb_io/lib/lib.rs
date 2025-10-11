@@ -82,7 +82,7 @@ pub struct Record {
     keywords: Option<String>,
 
     topology: Topology,
-    date: Option<Coa<gb_io::seq::Date>>,
+    date: Option<gb_io::seq::Date>,
     source: Option<Coa<gb_io::seq::Source>>,
     references: Coa<Vec<gb_io::seq::Reference>>,
     comments: Vec<String>,
@@ -150,7 +150,7 @@ impl Record {
         dblink: Option<String>,
         keywords: Option<String>,
         circular: bool,
-        date: Option<Py<Date>>,
+        date: Option<Bound<'py, PyAny>>,
         source: Option<Py<Source>>,
         contig: Option<Py<Location>>,
         references: Option<Bound<'py, PyAny>>,
@@ -167,10 +167,19 @@ impl Record {
         record.version = version;
         record.dblink = dblink;
         record.keywords = keywords;
-        record.date = date.map(|d| Coa::Shared(d.clone_ref(py)));
         record.source = source.map(|source| Coa::Shared(source.clone_ref(py)));
         record.contig = contig.map(|contig| Coa::Shared(contig.clone_ref(py)));
         record.sequence = PyByteArray::from(sequence).map(Py::from).map(Coa::Shared)?;
+
+        if let Some(dt) = date {
+            let year = dt.getattr("year")?.extract::<i32>()?;
+            let month = dt.getattr("month")?.extract::<u32>()?;
+            let day = dt.getattr("day")?.extract::<u32>()?;
+            match gb_io::seq::Date::from_ymd(year, month as u32, day as u32) {
+                Ok(dt) => record.date = Some(dt),
+                Err(_) => return Err(PyValueError::new_err("invalid date")),
+            }
+        }
 
         if circular {
             record.topology = Topology::Circular;
@@ -220,15 +229,28 @@ impl Record {
     fn get_date(mut slf: PyRefMut<'_, Self>) -> PyResult<PyObject> {
         let py = slf.py();
         match &mut slf.deref_mut().date {
-            Some(date) => date.to_shared(py)?.into_py_any(py),
+            Some(date) => {
+                Ok(PyDate::new(py, date.year() as _, date.month() as _, date.day() as _)?.into())
+                // date.to_shared(py)?.into_py_any(py),
+            }
             None => Ok(py.None()),
         }
     }
 
     #[setter]
-    fn set_date(mut slf: PyRefMut<'_, Self>, date: Option<Py<Date>>) -> PyResult<()> {
+    fn set_date<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        date: Option<Bound<'py, PyAny>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
         if let Some(dt) = date {
-            slf.date = Some(Coa::Shared(dt));
+            let year = dt.getattr("year")?.extract::<i32>()?;
+            let month = dt.getattr("month")?.extract::<u32>()?;
+            let day = dt.getattr("day")?.extract::<u32>()?;
+            match gb_io::seq::Date::from_ymd(year, month as u32, day as u32) {
+                Ok(dt) => slf.date = Some(dt),
+                Err(_) => return Err(PyValueError::new_err("invalid date")),
+            }
         } else {
             slf.date = None;
         }
@@ -280,7 +302,7 @@ impl Convert for gb_io::seq::Seq {
             Record {
                 name: self.name,
                 topology: self.topology,
-                date: self.date.map(Coa::Owned),
+                date: self.date,
                 length: self.len,
                 molecule_type: self.molecule_type,
                 division: self.division,
@@ -318,11 +340,7 @@ impl Extract for gb_io::seq::Seq {
             seq: record.sequence.to_owned_native(py)?,
             references: record.references.to_owned_native(py)?,
             features: record.features.to_owned_native(py)?,
-            date: record
-                .date
-                .as_ref()
-                .map(|date| date.to_owned_native(py))
-                .transpose()?,
+            date: record.date.clone(),
             source: record
                 .source
                 .as_ref()
@@ -399,59 +417,6 @@ impl Extract for gb_io::seq::Source {
             source: source.name.clone(),
             organism: source.organism.clone(),
         })
-    }
-}
-
-// ---------------------------------------------------------------------------
-
-#[pyclass(module = "gb_io")]
-#[derive(Debug, Default)]
-pub struct Date {
-    #[pyo3(get, set)]
-    year: i32,
-    #[pyo3(get, set)]
-    month: u8,
-    #[pyo3(get, set)]
-    day: u8,
-}
-
-#[pymethods]
-impl Date {
-    #[new]
-    #[pyo3(signature = (year, month, day))]
-    fn __new__(year: i32, month: u8, day: u8) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Self { year, month, day })
-    }
-
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyString>> {
-        let py = slf.py();
-        Ok(PyString::new(
-            py,
-            &format!("Date({}, {}, {})", slf.year, slf.month, slf.day),
-        ))
-    }
-}
-
-impl Convert for gb_io::seq::Date {
-    type Output = Date;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Py::new(
-            py,
-            Date {
-                year: self.year(),
-                month: self.month() as u8,
-                day: self.day() as u8,
-            },
-        )
-    }
-}
-
-impl Extract for gb_io::seq::Date {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let cell = object.bind(py);
-        let date = cell.borrow();
-        Self::from_ymd(date.year, date.month as u32, date.day as u32)
-            .map_err(|_| PyValueError::new_err("invalid date"))
     }
 }
 
@@ -1295,7 +1260,6 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<self::RecordReader>()?;
     m.add_class::<self::Reference>()?;
     m.add_class::<self::Source>()?;
-    m.add_class::<self::Date>()?;
     m.add("__package__", "gb_io")?;
     m.add("__build__", pyo3_built!(py, built))?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

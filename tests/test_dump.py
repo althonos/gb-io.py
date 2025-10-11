@@ -51,7 +51,7 @@ class TestDump(unittest.TestCase):
             sequence=b"ATGC",
             name="Test sequence",
             source=gb_io.Source(name="Testus organismae"),
-            date=gb_io.Date(2024, 4, 1),
+            date=datetime.date(2024, 4, 1),
             features=[
                 gb_io.Feature("CDS", gb_io.Range(0, 3), [gb_io.Qualifier("translation", "M")]),
             ]
