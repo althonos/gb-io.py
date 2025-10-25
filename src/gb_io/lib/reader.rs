@@ -92,7 +92,7 @@ impl RecordReader {
         let interner = &mut slf.interner;
         match py.detach(|| slf.reader.next()) {
             None => Ok(None),
-            Some(Ok(seq)) => Ok(Some(seq.convert_bound_with(py, interner)?)),
+            Some(Ok(seq)) => Ok(Some(seq.convert_with(py, interner)?)),
             Some(Err(e)) => {
                 Python::attach(|py| {
                     if PyErr::occurred(py) {

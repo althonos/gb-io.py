@@ -38,30 +38,26 @@ impl PyInterner {
 /// A trait for types that can be converted to an equivalent Python type.
 pub trait Convert: Sized {
     type Output;
-    fn convert_bound_with<'py>(
+    fn convert_with<'py>(
         self,
         py: Python<'py>,
         interner: &mut PyInterner,
     ) -> PyResult<Bound<'py, Self::Output>>;
-    // fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-    //     self.convert_bound_with(py, interner).map(|b| b.unbind())
-    // }
-    fn convert(self, py: Python) -> PyResult<Py<Self::Output>> {
-        self.convert_bound_with(py, &mut PyInterner::default())
-            .map(Bound::unbind)
+    fn convert<'py>(self, py: Python<'py>) -> PyResult<Bound<'py, Self::Output>> {
+        self.convert_with(py, &mut PyInterner::default())
     }
 }
 
 impl<T: Convert> Convert for Vec<T> {
     type Output = PyList;
-    fn convert_bound_with<'py>(
+    fn convert_with<'py>(
         self,
         py: Python<'py>,
         interner: &mut PyInterner,
     ) -> PyResult<Bound<'py, Self::Output>> {
         let converted = self
             .into_iter()
-            .map(|elem| elem.convert_bound_with(py, interner))
+            .map(|elem| elem.convert_with(py, interner))
             .collect::<Result<Vec<_>, _>>()?;
         PyList::new(py, converted)
     }
@@ -69,7 +65,7 @@ impl<T: Convert> Convert for Vec<T> {
 
 impl Convert for Vec<u8> {
     type Output = PyByteArray;
-    fn convert_bound_with<'py>(
+    fn convert_with<'py>(
         self,
         py: Python<'py>,
         _interner: &mut PyInterner,
@@ -80,7 +76,7 @@ impl Convert for Vec<u8> {
 
 /// A trait for types that can be extracted from an equivalent Python type.
 pub trait Extract: Convert + 'static {
-    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self>;
+    fn extract<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self>;
 }
 
 impl<T: Extract> Extract for Vec<T>
@@ -89,21 +85,21 @@ where
     for<'a, 'py> PyErr: From<<Py<<T as Convert>::Output> as FromPyObject<'a, 'py>>::Error>,
     // PyErr: From<<pyo3::Py<<T as Convert>::Output> as pyo3::FromPyObject<'a, 'py>>::Error>
 {
-    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+    fn extract<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
         let py = object.py();
         object
             .into_iter()
             .map(|elem| {
                 let p = elem.unbind();
                 let object: Py<<T as Convert>::Output> = p.extract(py).map_err(PyErr::from)?;
-                <T as Extract>::extract_bound(&object.bind(py))
+                <T as Extract>::extract(&object.bind(py))
             })
             .collect()
     }
 }
 
 impl Extract for Vec<u8> {
-    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+    fn extract<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
         Ok(object.to_vec())
     }
 }
@@ -158,7 +154,9 @@ impl<T: Convert + Temporary> Coa<T> {
         match self {
             Coa::Shared(pyref) => return Ok(pyref.clone_ref(py)),
             Coa::Owned(value) => {
-                let pyref = std::mem::replace(value, Temporary::temporary()).convert(py)?;
+                let pyref = std::mem::replace(value, Temporary::temporary())
+                    .convert(py)?
+                    .unbind();
                 *self = Coa::Shared(pyref.clone_ref(py));
                 Ok(pyref)
             }
@@ -183,7 +181,7 @@ where
     pub fn to_owned_class(&self, py: Python) -> PyResult<T> {
         match self {
             Coa::Owned(value) => Ok(value.clone()),
-            Coa::Shared(pyref) => Extract::extract_bound(pyref.bind(py)),
+            Coa::Shared(pyref) => Extract::extract(pyref.bind(py)),
         }
     }
 }
@@ -196,7 +194,7 @@ where
     pub fn to_owned_native(&self, py: Python) -> PyResult<T> {
         match self {
             Coa::Owned(value) => Ok(value.clone()),
-            Coa::Shared(pyref) => Extract::extract_bound(pyref.bind(py)),
+            Coa::Shared(pyref) => Extract::extract(pyref.bind(py)),
         }
     }
 }
