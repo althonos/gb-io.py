@@ -646,8 +646,9 @@ pub enum Strand {
     Reverse,
 }
 
-impl<'py> FromPyObject<'py> for Strand {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for Strand {
+    type Error = PyErr;
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
         let value = ob.extract::<Bound<PyString>>()?;
         if value == "+" {
@@ -695,7 +696,7 @@ impl Convert for gb_io::seq::Location {
                     .map(|loc| loc.convert_with(py, interner))
                     .collect::<PyResult<Vec<Py<Location>>>>()
                     .map(|objects| PyList::new(py, objects))
-                    .and_then(|list| list?.into_py_any(py)?.extract(py))?;
+                    .and_then(|list| list?.into_py_any(py)?.extract(py).map_err(PyErr::from))?;
                 Join::__new__(py, objects)
                     .and_then(|x| Py::new(py, x))
                     .and_then(|x| match x.into_py_any(py)?.extract::<Py<Location>>(py) {
@@ -1278,7 +1279,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     fn load(py: Python, fh: &Bound<PyAny>) -> PyResult<Py<PyList>> {
         // extract either a path or a file-handle from the arguments
         // let path: Option<String>;
-        let stream: Box<dyn Read> = if let Ok(s) = fh.downcast::<PyString>() {
+        let stream: Box<dyn Read> = if let Ok(s) = fh.cast::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::open(s.to_cow()?.as_ref()) {
                 Ok(f) => f,
@@ -1355,7 +1356,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     #[pyfn(m)]
     #[pyo3(name = "iter", text_signature = "(fh)")]
     fn iter(py: Python, fh: Bound<PyAny>) -> PyResult<Py<RecordReader>> {
-        let reader = match fh.downcast::<PyString>() {
+        let reader = match fh.cast::<PyString>() {
             Ok(s) => RecordReader::from_path(s.to_cow()?.as_ref())?,
             Err(_) => RecordReader::from_handle(fh)?,
         };
@@ -1389,7 +1390,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         truncate_locus: bool,
     ) -> PyResult<()> {
         // extract either a path or a file-handle from the arguments
-        let stream: Box<dyn Write> = if let Ok(s) = fh.downcast::<PyString>() {
+        let stream: Box<dyn Write> = if let Ok(s) = fh.cast::<PyString>() {
             // get a buffered reader to the resources pointed by `path`
             let bf = match std::fs::File::create(s.to_cow()?.as_ref()) {
                 Ok(f) => f,

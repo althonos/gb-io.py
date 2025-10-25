@@ -15,7 +15,7 @@ lazy_static::lazy_static! {
 macro_rules! unittest {
     ($name:ident) => {
         #[test]
-        fn $name() {
+        fn $name() -> PyResult<()> {
             // initialize
             Python::initialize();
 
@@ -26,50 +26,37 @@ macro_rules! unittest {
                     // create a Python module from our rust code with debug symbols
                     let module = PyModule::new(py, "gb_io").unwrap();
                     gb_io_py::init(py, &module).unwrap();
-                    py.import("sys")
-                        .unwrap()
-                        .getattr("modules")
-                        .unwrap()
-                        .downcast::<PyDict>()
-                        .unwrap()
-                        .set_item("gb_io", &module)
-                        .unwrap();
+                    py.import("sys")?
+                        .getattr("modules")?
+                        .cast::<PyDict>()?
+                        .set_item("gb_io", &module)?;
                     // patch `sys.path` to locate tests from the project folder
-                    py.import("sys")
-                        .unwrap()
-                        .getattr("path")
-                        .unwrap()
-                        .downcast::<PyList>()
-                        .unwrap()
-                        .insert(0, env!("CARGO_MANIFEST_DIR"))
-                        .unwrap();
+                    py.import("sys")?
+                        .getattr("path")?
+                        .cast::<PyList>()?
+                        .insert(0, env!("CARGO_MANIFEST_DIR"))?;
                     // run tests with the unittest runner
                     let kwargs = PyDict::new(py);
-                    kwargs.set_item("verbosity", 2).unwrap();
-                    kwargs.set_item("exit", false).unwrap();
-                    let prog = py
-                        .import("unittest")
-                        .unwrap()
-                        .call_method(
-                            "main",
-                            (concat!("tests.", stringify!($name)),),
-                            Some(&kwargs),
-                        )
-                        .unwrap();
+                    kwargs.set_item("verbosity", 2)?;
+                    kwargs.set_item("exit", false)?;
+                    let prog = py.import("unittest")?.call_method(
+                        "main",
+                        (concat!("tests.", stringify!($name)),),
+                        Some(&kwargs),
+                    )?;
                     // check run was was successful
-                    prog.getattr("result")
-                        .unwrap()
-                        .call_method0("wasSuccessful")
-                        .unwrap()
+                    prog.getattr("result")?
+                        .call_method0("wasSuccessful")?
                         .extract::<bool>()
-                        .unwrap()
                 })
-            };
+            }?;
 
             // check the test succeeded
             if !success {
                 panic!("unittest.main failed")
             }
+
+            Ok(())
         }
     };
 }

@@ -46,9 +46,9 @@ pub enum PyFileRead<'p> {
 impl<'p> PyFileRead<'p> {
     pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<Self> {
         let res = file.call_method1("read", (0,))?;
-        if res.downcast::<PyBytes>().is_ok() {
+        if res.cast::<PyBytes>().is_ok() {
             PyFileReadBin::new(file).map(Self::Binary)
-        } else if res.downcast::<PyString>().is_ok() {
+        } else if res.cast::<PyString>().is_ok() {
             PyFileReadText::new(file).map(Self::Text)
         } else {
             let ty = res.get_type().name()?.to_string();
@@ -235,10 +235,10 @@ impl PyFileGILRead {
     pub fn from_ref(file: Bound<PyAny>) -> PyResult<PyFileGILRead> {
         let py = file.py();
         let res = file.call_method1("read", (0,))?;
-        if res.downcast::<PyBytes>().is_ok() {
+        if res.cast::<PyBytes>().is_ok() {
             let obj = file.into_py_any(py)?;
             PyFileGILReadBin::new(py, obj).map(Self::Binary)
-        } else if res.downcast::<PyString>().is_ok() {
+        } else if res.cast::<PyString>().is_ok() {
             let obj = file.into_py_any(py)?;
             PyFileGILReadText::new(py, obj).map(Self::Text)
         } else {
