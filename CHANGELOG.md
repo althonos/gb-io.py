@@ -6,7 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.8...HEAD
+
+## [v0.3.8] - 2025-10-25
+[v0.3.8]: https://github.com/althonos/gb-io.py/compare/v0.3.7...v0.3.8
+
+### Changed
+- Bump `pyo3` dependency to `v0.27.1`.
+- Use `pyo3::Bound` as argument wherever the GIL is held in Python methods.
+- Streamline implementation of `__repr__` methods.
+
+### Fixed
+- Use of deprecated `#[pyfn]` attributes in module initializer.
+
 
 ## [v0.3.7] - 2025-10-11
 [v0.3.7]: https://github.com/althonos/gb-io.py/compare/v0.3.6...v0.3.7
