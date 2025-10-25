@@ -295,8 +295,12 @@ impl Record {
 
 impl Convert for gb_io::seq::Seq {
     type Output = Record;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Py::new(
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        _interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Bound::new(
             py,
             Record {
                 name: self.name,
@@ -398,8 +402,12 @@ impl Temporary for gb_io::seq::Source {
 
 impl Convert for gb_io::seq::Source {
     type Output = Source;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Py::new(
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        _interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Bound::new(
             py,
             Source {
                 name: self.source,
@@ -502,8 +510,12 @@ impl Feature {
 
 impl Convert for gb_io::seq::Feature {
     type Output = Feature;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Py::new(
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        _interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Bound::new(
             py,
             Feature {
                 kind: Coa::from(FeatureKind(self.kind)),
@@ -541,8 +553,12 @@ struct FeatureKind(Cow<'static, str>);
 
 impl Convert for FeatureKind {
     type Output = PyString;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(interner.intern(py, self.0.as_ref()))
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Ok(interner.intern(py, self.0.as_ref()).bind(py).clone())
     }
 }
 
@@ -604,8 +620,12 @@ struct QualifierKey(Cow<'static, str>);
 
 impl Convert for QualifierKey {
     type Output = PyString;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(interner.intern(py, self.0))
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Ok(interner.intern(py, self.0).bind(py).clone())
     }
 }
 
@@ -618,8 +638,12 @@ impl Extract for QualifierKey {
 
 impl Convert for (QualifierKey, Option<String>) {
     type Output = Qualifier;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Py::new(
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        _interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Bound::new(
             py,
             Qualifier {
                 key: self.0.into(),
@@ -688,7 +712,11 @@ pub struct Location;
 
 impl Convert for gb_io::seq::Location {
     type Output = Location;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
                 let objects: Py<PyAny> = $inner
@@ -698,50 +726,30 @@ impl Convert for gb_io::seq::Location {
                     .map(|objects| PyList::new(py, objects))
                     .and_then(|list| list?.into_py_any(py)?.extract(py).map_err(PyErr::from))?;
                 Join::__new__(py, objects)
-                    .and_then(|x| Py::new(py, x))
-                    .and_then(|x| match x.into_py_any(py)?.extract::<Py<Location>>(py) {
-                        Ok(pyref) => Ok(pyref.clone_ref(py)),
-                        Err(e) => Err(PyErr::from(e)),
-                    })
+                    .and_then(|x| Bound::new(py, x))
+                    .map(|x| x.as_super().clone())
             }};
         }
 
         match self {
             SeqLocation::Range((start, Before(before)), (end, After(after))) => {
-                Py::new(py, Range::__new__(start, end, before, after)).and_then(|x| {
-                    match x.into_py_any(py)?.extract::<Py<Location>>(py) {
-                        Ok(pyref) => Ok(pyref.clone_ref(py)),
-                        Err(e) => Err(PyErr::from(e)),
-                    }
-                })
+                Bound::new(py, Range::__new__(start, end, before, after))
+                    .map(|x| x.as_super().clone())
             }
             SeqLocation::Between(start, end) => {
-                Py::new(py, Between::__new__(start, end)).and_then(|x| {
-                    match x.into_py_any(py)?.extract::<Py<Location>>(py) {
-                        Ok(pyref) => Ok(pyref.clone_ref(py)),
-                        Err(e) => Err(PyErr::from(e)),
-                    }
-                })
+                Bound::new(py, Between::__new__(start, end)).map(|x| x.as_super().clone())
             }
             SeqLocation::Complement(inner_location) => (*inner_location)
                 .convert_with(py, interner)
-                .and_then(|inner| Py::new(py, Complement::__new__(inner)))
-                .and_then(|x| match x.into_py_any(py)?.extract::<Py<Location>>(py) {
-                    Ok(pyref) => Ok(pyref.clone_ref(py)),
-                    Err(e) => Err(PyErr::from(e)),
-                }),
+                .and_then(|inner| Bound::new(py, Complement::__new__(inner)))
+                .map(|x| x.as_super().clone()),
             SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
             SeqLocation::Order(inner_locations) => convert_vec!(Order, inner_locations),
             SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
             SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
             SeqLocation::External(accession, location) => {
                 let loc = location.map(|x| x.convert_with(py, interner)).transpose()?;
-                Py::new(py, External::__new__(accession, loc)).and_then(|x| {
-                    match x.into_py_any(py)?.extract::<Py<Location>>(py) {
-                        Ok(pyref) => Ok(pyref.clone_ref(py)),
-                        Err(e) => Err(PyErr::from(e)),
-                    }
-                })
+                Bound::new(py, External::__new__(accession, loc)).map(|x| x.as_super().clone())
             }
             _ => Err(PyNotImplementedError::new_err(format!(
                 "conversion of {:?}",
@@ -1182,8 +1190,12 @@ impl Reference {
 
 impl Convert for gb_io::seq::Reference {
     type Output = Reference;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Py::new(
+    fn convert_bound_with<'py>(
+        self,
+        py: Python<'py>,
+        _interner: &mut PyInterner,
+    ) -> PyResult<Bound<'py, Self::Output>> {
+        Bound::new(
             py,
             Reference {
                 description: self.description,
