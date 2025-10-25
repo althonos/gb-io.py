@@ -778,30 +778,30 @@ impl Extract for gb_io::seq::Location {
             Ok(SeqLocation::Between(b.start, b.end))
         } else if let Ok(complement) = location.cast::<Complement>() {
             let c = complement.borrow();
-            let location = Extract::extract(py, c.location.clone_ref(py))?;
+            let location = Extract::extract_bound(c.location.bind(py))?;
             Ok(SeqLocation::Complement(Box::new(location)))
         } else if let Ok(join) = location.cast::<Join>() {
             let j = join.borrow();
-            let locations = Extract::extract(py, j.locations.clone_ref(py))?;
+            let locations = Extract::extract_bound(j.locations.bind(py))?;
             Ok(SeqLocation::Join(locations))
         } else if let Ok(order) = location.cast::<Order>() {
             let o = order.borrow();
-            let locations = Extract::extract(py, o.locations.clone_ref(py))?;
+            let locations = Extract::extract_bound(o.locations.bind(py))?;
             Ok(SeqLocation::Order(locations))
         } else if let Ok(bond) = location.cast::<Bond>() {
             let b = bond.borrow();
-            let locations = Extract::extract(py, b.locations.clone_ref(py))?;
+            let locations = Extract::extract_bound(b.locations.bind(py))?;
             Ok(SeqLocation::Bond(locations))
         } else if let Ok(one_of) = location.cast::<OneOf>() {
             let o = one_of.borrow();
-            let locations = Extract::extract(py, o.locations.clone_ref(py))?;
+            let locations = Extract::extract_bound(o.locations.bind(py))?;
             Ok(SeqLocation::OneOf(locations))
         } else if let Ok(external) = location.cast::<External>() {
             let e = external.borrow();
             let location = e
                 .location
                 .as_ref()
-                .map(|loc| Extract::extract(py, loc.clone_ref(py)))
+                .map(|loc| Extract::extract_bound(loc.bind(py)))
                 .transpose()?
                 .map(Box::new);
             Ok(SeqLocation::External(e.accession.clone(), location))
@@ -1467,8 +1467,8 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         // write sequences
         for result in it {
             // make sure we received a Record object
-            let record = result?.extract::<Py<Record>>()?;
-            let seq = Extract::extract(py, record)?;
+            let record = result?;
+            let seq = Extract::extract_bound(record.cast::<Record>()?)?;
             // write the seq
             writer.write(&seq).map_err(|err| match err.raw_os_error() {
                 Some(code) => PyIOError::new_err((code, err.to_string())),

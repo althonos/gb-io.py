@@ -80,9 +80,6 @@ impl Convert for Vec<u8> {
 
 /// A trait for types that can be extracted from an equivalent Python type.
 pub trait Extract: Convert + 'static {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        Self::extract_bound(object.bind(py))
-    }
     fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self>;
 }
 
@@ -99,7 +96,7 @@ where
             .map(|elem| {
                 let p = elem.unbind();
                 let object: Py<<T as Convert>::Output> = p.extract(py).map_err(PyErr::from)?;
-                <T as Extract>::extract(py, object)
+                <T as Extract>::extract_bound(&object.bind(py))
             })
             .collect()
     }
@@ -186,7 +183,7 @@ where
     pub fn to_owned_class(&self, py: Python) -> PyResult<T> {
         match self {
             Coa::Owned(value) => Ok(value.clone()),
-            Coa::Shared(pyref) => Extract::extract(py, pyref.clone_ref(py)),
+            Coa::Shared(pyref) => Extract::extract_bound(pyref.bind(py)),
         }
     }
 }
@@ -199,7 +196,7 @@ where
     pub fn to_owned_native(&self, py: Python) -> PyResult<T> {
         match self {
             Coa::Owned(value) => Ok(value.clone()),
-            Coa::Shared(pyref) => Extract::extract(py, pyref.clone_ref(py)),
+            Coa::Shared(pyref) => Extract::extract_bound(pyref.bind(py)),
         }
     }
 }
