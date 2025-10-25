@@ -43,23 +43,17 @@ pub trait Convert: Sized {
         py: Python<'py>,
         interner: &mut PyInterner,
     ) -> PyResult<Bound<'py, Self::Output>>;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        self.convert_bound_with(py, interner).map(|b| b.unbind())
-    }
+    // fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
+    //     self.convert_bound_with(py, interner).map(|b| b.unbind())
+    // }
     fn convert(self, py: Python) -> PyResult<Py<Self::Output>> {
-        self.convert_with(py, &mut PyInterner::default())
+        self.convert_bound_with(py, &mut PyInterner::default())
+            .map(Bound::unbind)
     }
 }
 
 impl<T: Convert> Convert for Vec<T> {
     type Output = PyList;
-    fn convert_with(self, py: Python, interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        let converted = self
-            .into_iter()
-            .map(|elem| elem.convert_with(py, interner))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Py::from(PyList::new(py, converted)?))
-    }
     fn convert_bound_with<'py>(
         self,
         py: Python<'py>,
@@ -75,9 +69,6 @@ impl<T: Convert> Convert for Vec<T> {
 
 impl Convert for Vec<u8> {
     type Output = PyByteArray;
-    fn convert_with(self, py: Python, _interner: &mut PyInterner) -> PyResult<Py<Self::Output>> {
-        Ok(Py::from(PyByteArray::new(py, self.as_slice())))
-    }
     fn convert_bound_with<'py>(
         self,
         py: Python<'py>,

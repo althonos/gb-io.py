@@ -82,17 +82,17 @@ impl RecordReader {
 
 #[pymethods]
 impl RecordReader {
-    fn __iter__<'p>(slf: PyRefMut<'p, Self>) -> PyResult<PyRefMut<'p, Self>> {
+    fn __iter__<'py>(slf: PyRefMut<'py, Self>) -> PyResult<PyRefMut<'py, Self>> {
         Ok(slf)
     }
 
-    fn __next__<'p>(mut slf: PyRefMut<'p, Self>) -> PyResult<Option<Py<Record>>> {
+    fn __next__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Option<Bound<'py, Record>>> {
+        let py = slf.py();
         let slf = slf.deref_mut();
-        match slf.reader.next() {
+        let interner = &mut slf.interner;
+        match py.detach(|| slf.reader.next()) {
             None => Ok(None),
-            Some(Ok(seq)) => {
-                Python::attach(|py| Ok(Some(seq.convert_with(py, &mut slf.interner)?)))
-            }
+            Some(Ok(seq)) => Ok(Some(seq.convert_bound_with(py, interner)?)),
             Some(Err(e)) => {
                 Python::attach(|py| {
                     if PyErr::occurred(py) {

@@ -719,13 +719,13 @@ impl Convert for gb_io::seq::Location {
     ) -> PyResult<Bound<'py, Self::Output>> {
         macro_rules! convert_vec {
             ($ty:ident, $inner:expr) => {{
-                let objects: Py<PyAny> = $inner
+                let objects: Bound<PyAny> = $inner
                     .into_iter()
-                    .map(|loc| loc.convert_with(py, interner))
-                    .collect::<PyResult<Vec<Py<Location>>>>()
-                    .map(|objects| PyList::new(py, objects))
-                    .and_then(|list| list?.into_py_any(py)?.extract(py).map_err(PyErr::from))?;
-                Join::__new__(py, objects)
+                    .map(|loc| loc.convert_bound_with(py, interner))
+                    .collect::<PyResult<Vec<Bound<'py, Location>>>>()
+                    .and_then(|objects| PyList::new(py, objects))?
+                    .into_any();
+                Join::__new__(objects)
                     .and_then(|x| Bound::new(py, x))
                     .map(|x| x.as_super().clone())
             }};
@@ -740,7 +740,7 @@ impl Convert for gb_io::seq::Location {
                 Bound::new(py, Between::__new__(start, end)).map(|x| x.as_super().clone())
             }
             SeqLocation::Complement(inner_location) => (*inner_location)
-                .convert_with(py, interner)
+                .convert_bound_with(py, interner)
                 .and_then(|inner| Bound::new(py, Complement::__new__(inner)))
                 .map(|x| x.as_super().clone()),
             SeqLocation::Join(inner_locations) => convert_vec!(Join, inner_locations),
@@ -748,7 +748,9 @@ impl Convert for gb_io::seq::Location {
             SeqLocation::Bond(inner_locations) => convert_vec!(Bond, inner_locations),
             SeqLocation::OneOf(inner_locations) => convert_vec!(OneOf, inner_locations),
             SeqLocation::External(accession, location) => {
-                let loc = location.map(|x| x.convert_with(py, interner)).transpose()?;
+                let loc = location
+                    .map(|x| x.convert_bound_with(py, interner))
+                    .transpose()?;
                 Bound::new(py, External::__new__(accession, loc)).map(|x| x.as_super().clone())
             }
             _ => Err(PyNotImplementedError::new_err(format!(
@@ -909,8 +911,10 @@ pub struct Complement {
 #[pymethods]
 impl Complement {
     #[new]
-    fn __new__(location: Py<Location>) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Location).add_subclass(Self { location })
+    fn __new__(location: Bound<Location>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Location).add_subclass(Self {
+            location: location.unbind(),
+        })
     }
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -963,9 +967,10 @@ pub struct Join {
 #[pymethods]
 impl Join {
     #[new]
-    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(locations: Bound<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+        let py = locations.py();
         let list = PyList::empty(py);
-        for result in locations.bind(py).try_iter()? {
+        for result in locations.try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1025,9 +1030,10 @@ pub struct Order {
 #[pymethods]
 impl Order {
     #[new]
-    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(locations: Bound<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+        let py = locations.py();
         let list = PyList::empty(py);
-        for result in locations.bind(py).try_iter()? {
+        for result in locations.try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1054,9 +1060,10 @@ pub struct Bond {
 #[pymethods]
 impl Bond {
     #[new]
-    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(locations: Bound<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+        let py = locations.py();
         let list = PyList::empty(py);
-        for result in locations.bind(py).try_iter()? {
+        for result in locations.try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1084,9 +1091,10 @@ pub struct OneOf {
 #[pymethods]
 impl OneOf {
     #[new]
-    fn __new__(py: Python, locations: Py<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+    fn __new__(locations: Bound<PyAny>) -> PyResult<PyClassInitializer<Self>> {
+        let py = locations.py();
         let list = PyList::empty(py);
-        for result in locations.bind(py).try_iter()? {
+        for result in locations.try_iter()? {
             let object = result?;
             object.extract::<Bound<Location>>()?;
             list.append(object)?;
@@ -1118,10 +1126,10 @@ pub struct External {
 impl External {
     #[new]
     #[pyo3(signature = (accession, location=None))]
-    fn __new__(accession: String, location: Option<Py<Location>>) -> PyClassInitializer<Self> {
+    fn __new__(accession: String, location: Option<Bound<Location>>) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Location).add_subclass(Self {
             accession,
-            location,
+            location: location.map(Bound::unbind),
         })
     }
 
@@ -1336,7 +1344,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         for result in reader {
             match result {
                 Ok(seq) => {
-                    records.append(Py::new(py, seq.convert_with(py, &mut interner)?)?)?;
+                    records.append(seq.convert_bound_with(py, &mut interner)?)?;
                 }
                 Err(GbParserError::Io(e)) => {
                     return match e.raw_os_error() {
