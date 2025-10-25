@@ -5,6 +5,7 @@ extern crate pyo3_built;
 
 mod built;
 mod coa;
+mod dunder;
 mod pyfile;
 mod reader;
 
@@ -43,6 +44,7 @@ use self::coa::Convert;
 use self::coa::Extract;
 use self::coa::PyInterner;
 use self::coa::Temporary;
+use self::dunder::PyRepr;
 use self::pyfile::PyFileRead;
 use self::pyfile::PyFileWrite;
 use self::reader::RecordReader;
@@ -676,7 +678,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Strand {
     type Error = PyErr;
     fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
-        let value = ob.extract::<Bound<PyString>>()?;
+        let value = ob.cast::<PyString>()?;
         if value == "+" {
             Ok(Strand::Direct)
         } else if value == "-" {
@@ -842,6 +844,22 @@ impl From<&Range> for SeqLocation {
     }
 }
 
+impl<'py> PyRepr<'py> for Range {
+    type Output = String;
+    type Error = Infallible;
+    fn repr(&self, _py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        Ok(match (self.before, self.after) {
+            (false, false) => format!("Range({}, {})", self.start, self.end),
+            (true, false) => format!("Range({}, {}, before=True)", self.start, self.end),
+            (false, true) => format!("Range({}, {}, after=True)", self.start, self.end),
+            (true, true) => format!(
+                "Range({}, {}, before=True, after=True)",
+                self.start, self.end
+            ),
+        })
+    }
+}
+
 #[pymethods]
 impl Range {
     #[new]
@@ -855,16 +873,10 @@ impl Range {
         })
     }
 
-    fn __repr__(&self) -> String {
-        match (self.before, self.after) {
-            (false, false) => format!("Range({}, {})", self.start, self.end),
-            (true, false) => format!("Range({}, {}, before=True)", self.start, self.end),
-            (false, true) => format!("Range({}, {}, after=True)", self.start, self.end),
-            (true, true) => format!(
-                "Range({}, {}, before=True, after=True)",
-                self.start, self.end
-            ),
-        }
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 
     #[getter]
@@ -885,6 +897,14 @@ pub struct Between {
     end: i64,
 }
 
+impl<'py> PyRepr<'py> for Between {
+    type Output = String;
+    type Error = Infallible;
+    fn repr(&self, _py: Python<'py>) -> Result<String, Infallible> {
+        Ok(format!("Between({}, {})", self.start, self.end))
+    }
+}
+
 #[pymethods]
 impl Between {
     #[new]
@@ -895,8 +915,10 @@ impl Between {
         })
     }
 
-    fn __repr__(&self) -> String {
-        format!("Between({}, {})", self.start, self.end)
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 
     #[getter]
@@ -914,6 +936,14 @@ pub struct Complement {
     location: Py<Location>,
 }
 
+impl<'py> PyRepr<'py> for Complement {
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn repr(&self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        PyString::new(py, "Complement({!r})").call_method1("format", (&self.location.bind(py),))
+    }
+}
+
 #[pymethods]
 impl Complement {
     #[new]
@@ -923,10 +953,10 @@ impl Complement {
         })
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        PyString::new(py, "Complement({!r})")
-            .call_method1("format", (Py::clone_ref(&slf.location, py),))
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 
     #[getter]
@@ -970,6 +1000,14 @@ pub struct Join {
     locations: Py<PyList>,
 }
 
+impl<'py> PyRepr<'py> for Join {
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn repr(&self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        PyString::new(py, "Join({!r})").call_method1("format", (&self.locations,))
+    }
+}
+
 #[pymethods]
 impl Join {
     #[new]
@@ -978,7 +1016,7 @@ impl Join {
         let list = PyList::empty(py);
         for result in locations.try_iter()? {
             let object = result?;
-            object.extract::<Bound<Location>>()?;
+            object.cast::<Location>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -986,9 +1024,10 @@ impl Join {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        PyString::new(py, "Join({!r})").call_method1("format", (&slf.locations,))
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 
     #[getter]
@@ -1033,6 +1072,14 @@ pub struct Order {
     locations: Py<PyList>,
 }
 
+impl<'py> PyRepr<'py> for Order {
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn repr(&self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        PyString::new(py, "Order({!r})").call_method1("format", (&self.locations,))
+    }
+}
+
 #[pymethods]
 impl Order {
     #[new]
@@ -1041,7 +1088,7 @@ impl Order {
         let list = PyList::empty(py);
         for result in locations.try_iter()? {
             let object = result?;
-            object.extract::<Bound<Location>>()?;
+            object.cast::<Location>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -1049,9 +1096,10 @@ impl Order {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        PyString::new(py, "Order({!r})").call_method1("format", (&slf.locations,))
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 }
 
@@ -1063,6 +1111,14 @@ pub struct Bond {
     locations: Py<PyList>,
 }
 
+impl<'py> PyRepr<'py> for Bond {
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn repr(&self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        PyString::new(py, "Bond({!r})").call_method1("format", (&self.locations,))
+    }
+}
+
 #[pymethods]
 impl Bond {
     #[new]
@@ -1071,7 +1127,7 @@ impl Bond {
         let list = PyList::empty(py);
         for result in locations.try_iter()? {
             let object = result?;
-            object.extract::<Bound<Location>>()?;
+            object.cast::<Location>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -1079,9 +1135,10 @@ impl Bond {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        PyString::new(py, "Bond({!r})").call_method1("format", (&slf.locations,))
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 }
 
@@ -1094,6 +1151,14 @@ pub struct OneOf {
     locations: Py<PyList>,
 }
 
+impl<'py> PyRepr<'py> for OneOf {
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn repr(&self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        PyString::new(py, "OneOf({!r})").call_method1("format", (&self.locations,))
+    }
+}
+
 #[pymethods]
 impl OneOf {
     #[new]
@@ -1102,7 +1167,7 @@ impl OneOf {
         let list = PyList::empty(py);
         for result in locations.try_iter()? {
             let object = result?;
-            object.extract::<Bound<Location>>()?;
+            object.cast::<Location>()?;
             list.append(object)?;
         }
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
@@ -1110,9 +1175,10 @@ impl OneOf {
         }))
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        PyString::new(py, "OneOf({!r})").call_method1("format", (&slf.locations,))
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 }
 
@@ -1128,6 +1194,18 @@ pub struct External {
     location: Option<Py<Location>>,
 }
 
+impl<'py> PyRepr<'py> for External {
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn repr(&self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        match &self.location {
+            Some(s) => PyString::new(py, "External({!r}, {!r})")
+                .call_method1("format", (&self.accession, s)),
+            None => PyString::new(py, "External({!r})").call_method1("format", (&self.accession,)),
+        }
+    }
+}
+
 #[pymethods]
 impl External {
     #[new]
@@ -1139,13 +1217,10 @@ impl External {
         })
     }
 
-    fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        match &slf.location {
-            Some(s) => PyString::new(py, "External({!r}, {!r})")
-                .call_method1("format", (&slf.accession, s)),
-            None => PyString::new(py, "External({!r})").call_method1("format", (&slf.accession,)),
-        }
+    fn __repr__<'py>(
+        slf: PyRef<'py, Self>,
+    ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
+        slf.repr(slf.py())
     }
 }
 
@@ -1456,7 +1531,7 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         writer.escape_locus(escape_locus);
 
         // if a single record was given, wrap it in an iterable
-        let it = if let Ok(record) = records.extract::<Bound<'_, Record>>() {
+        let it = if let Ok(record) = records.cast::<Record>() {
             PyIterator::from_object(&PyTuple::new(py, [record])?.into_py_any(py)?.bind(py))?
         } else {
             PyIterator::from_object(&records)?
