@@ -80,7 +80,10 @@ impl Convert for Vec<u8> {
 
 /// A trait for types that can be extracted from an equivalent Python type.
 pub trait Extract: Convert + 'static {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self>;
+    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
+        Self::extract_bound(object.bind(py))
+    }
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self>;
 }
 
 impl<T: Extract> Extract for Vec<T>
@@ -89,9 +92,10 @@ where
     for<'a, 'py> PyErr: From<<Py<<T as Convert>::Output> as FromPyObject<'a, 'py>>::Error>,
     // PyErr: From<<pyo3::Py<<T as Convert>::Output> as pyo3::FromPyObject<'a, 'py>>::Error>
 {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let list = object.bind(py);
-        list.into_iter()
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let py = object.py();
+        object
+            .into_iter()
             .map(|elem| {
                 let p = elem.unbind();
                 let object: Py<<T as Convert>::Output> = p.extract(py).map_err(PyErr::from)?;
@@ -102,8 +106,8 @@ where
 }
 
 impl Extract for Vec<u8> {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        Ok(object.bind(py).to_vec())
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        Ok(object.to_vec())
     }
 }
 

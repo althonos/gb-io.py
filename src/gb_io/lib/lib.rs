@@ -326,8 +326,9 @@ impl Convert for gb_io::seq::Seq {
 }
 
 impl Extract for gb_io::seq::Seq {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let record = object.bind(py).borrow();
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let py = object.py();
+        let record = object.borrow();
         Ok(gb_io::seq::Seq {
             name: record.name.clone(),
             topology: record.topology.clone(),
@@ -418,8 +419,8 @@ impl Convert for gb_io::seq::Source {
 }
 
 impl Extract for gb_io::seq::Source {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let source = object.extract::<Bound<Source>>(py)?.borrow();
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let source = object.cast::<Source>()?.borrow();
         Ok(gb_io::seq::Source {
             source: source.name.clone(),
             organism: source.organism.clone(),
@@ -532,9 +533,9 @@ impl Convert for gb_io::seq::Feature {
 }
 
 impl Extract for gb_io::seq::Feature {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let cell = object.bind(py);
-        let feature = cell.borrow();
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let py = object.py();
+        let feature = object.borrow();
         Ok(gb_io::seq::Feature {
             kind: feature.kind.to_owned_native(py)?.0,
             location: feature.location.to_owned_class(py)?,
@@ -563,8 +564,8 @@ impl Convert for FeatureKind {
 }
 
 impl Extract for FeatureKind {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let s = object.extract::<Bound<PyString>>(py)?;
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let s = object.cast::<PyString>()?;
         Ok(FeatureKind(Cow::from(s.to_cow()?.into_owned())))
     }
 }
@@ -630,8 +631,8 @@ impl Convert for QualifierKey {
 }
 
 impl Extract for QualifierKey {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let s = object.extract::<Bound<PyString>>(py)?;
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let s = object.cast::<PyString>()?;
         Ok(QualifierKey(Cow::from(s.to_cow()?.into_owned())))
     }
 }
@@ -654,10 +655,11 @@ impl Convert for (QualifierKey, Option<String>) {
 }
 
 impl Extract for (QualifierKey, Option<String>) {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let py_cell = object.bind(py);
-        let key = py_cell.borrow().key.to_owned_native(py)?;
-        let value = py_cell.borrow().value.clone();
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let py = object.py();
+        let b = object.borrow();
+        let key = b.key.to_owned_native(py)?;
+        let value = b.value.clone();
         Ok((key, value))
     }
 }
@@ -762,41 +764,47 @@ impl Convert for gb_io::seq::Location {
 }
 
 impl Extract for gb_io::seq::Location {
-    fn extract(py: Python, object: Py<Location>) -> PyResult<Self> {
-        let location = object.bind(py);
-        if let Ok(range) = location.extract::<Bound<Range>>() {
-            let range = range.borrow();
+    fn extract_bound<'py>(object: &Bound<'py, Location>) -> PyResult<Self> {
+        let py = object.py();
+        let location = object;
+        if let Ok(range) = location.cast::<Range>() {
+            let r = range.borrow();
             Ok(SeqLocation::Range(
-                (range.start, gb_io::seq::Before(range.before)),
-                (range.end, gb_io::seq::After(range.after)),
+                (r.start, gb_io::seq::Before(r.before)),
+                (r.end, gb_io::seq::After(r.after)),
             ))
-        } else if let Ok(between) = location.extract::<Bound<Between>>() {
-            let between = between.borrow();
-            Ok(SeqLocation::Between(between.start, between.end))
-        } else if let Ok(complement) = location.extract::<Bound<Complement>>() {
-            let location = Extract::extract(py, complement.borrow().location.clone_ref(py))?;
+        } else if let Ok(between) = location.cast::<Between>() {
+            let b = between.borrow();
+            Ok(SeqLocation::Between(b.start, b.end))
+        } else if let Ok(complement) = location.cast::<Complement>() {
+            let c = complement.borrow();
+            let location = Extract::extract(py, c.location.clone_ref(py))?;
             Ok(SeqLocation::Complement(Box::new(location)))
-        } else if let Ok(join) = location.extract::<Bound<Join>>() {
-            let locations = Extract::extract(py, join.borrow().locations.clone_ref(py))?;
+        } else if let Ok(join) = location.cast::<Join>() {
+            let j = join.borrow();
+            let locations = Extract::extract(py, j.locations.clone_ref(py))?;
             Ok(SeqLocation::Join(locations))
-        } else if let Ok(order) = location.extract::<Bound<Order>>() {
-            let locations = Extract::extract(py, order.borrow().locations.clone_ref(py))?;
+        } else if let Ok(order) = location.cast::<Order>() {
+            let o = order.borrow();
+            let locations = Extract::extract(py, o.locations.clone_ref(py))?;
             Ok(SeqLocation::Order(locations))
-        } else if let Ok(bond) = location.extract::<Bound<Bond>>() {
-            let locations = Extract::extract(py, bond.borrow().locations.clone_ref(py))?;
+        } else if let Ok(bond) = location.cast::<Bond>() {
+            let b = bond.borrow();
+            let locations = Extract::extract(py, b.locations.clone_ref(py))?;
             Ok(SeqLocation::Bond(locations))
-        } else if let Ok(one_of) = location.extract::<Bound<OneOf>>() {
-            let locations = Extract::extract(py, one_of.borrow().locations.clone_ref(py))?;
+        } else if let Ok(one_of) = location.cast::<OneOf>() {
+            let o = one_of.borrow();
+            let locations = Extract::extract(py, o.locations.clone_ref(py))?;
             Ok(SeqLocation::OneOf(locations))
-        } else if let Ok(external) = location.extract::<Bound<External>>() {
-            let external = external.borrow();
-            let location = external
+        } else if let Ok(external) = location.cast::<External>() {
+            let e = external.borrow();
+            let location = e
                 .location
                 .as_ref()
                 .map(|loc| Extract::extract(py, loc.clone_ref(py)))
                 .transpose()?
                 .map(Box::new);
-            Ok(SeqLocation::External(external.accession.clone(), location))
+            Ok(SeqLocation::External(e.accession.clone(), location))
         } else {
             Err(PyTypeError::new_err("expected Location"))
         }
@@ -1219,8 +1227,8 @@ impl Convert for gb_io::seq::Reference {
 }
 
 impl Extract for gb_io::seq::Reference {
-    fn extract(py: Python, object: Py<<Self as Convert>::Output>) -> PyResult<Self> {
-        let reference = object.bind(py).borrow();
+    fn extract_bound<'py>(object: &Bound<'py, <Self as Convert>::Output>) -> PyResult<Self> {
+        let reference = object.borrow();
         Ok(gb_io::seq::Reference {
             description: reference.description.clone(),
             authors: reference.authors.clone(),
