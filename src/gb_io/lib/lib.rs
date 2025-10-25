@@ -1260,6 +1260,9 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<self::RecordReader>()?;
     m.add_class::<self::Reference>()?;
     m.add_class::<self::Source>()?;
+    m.add_function(wrap_pyfunction!(load, m)?)?;
+    m.add_function(wrap_pyfunction!(iter, m)?)?;
+    m.add_function(wrap_pyfunction!(dump, m)?)?;
     m.add("__package__", "gb_io")?;
     m.add("__build__", pyo3_built!(py, built))?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
@@ -1274,9 +1277,9 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     /// Returns:
     ///     `list` of `Record`: A list containing all the records in the file.
     ///
-    #[pyfn(m)]
+    #[pyfunction]
     #[pyo3(name = "load", text_signature = "(fh)")]
-    fn load(py: Python, fh: &Bound<PyAny>) -> PyResult<Py<PyList>> {
+    pub fn load(py: Python, fh: &Bound<PyAny>) -> PyResult<Py<PyList>> {
         // extract either a path or a file-handle from the arguments
         // let path: Option<String>;
         let stream: Box<dyn Read> = if let Ok(s) = fh.cast::<PyString>() {
@@ -1353,9 +1356,9 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     ///     `~gb_io.RecordReader`: An iterator over the GenBank records in
     ///     the given file or file-handle.
     ///
-    #[pyfn(m)]
+    #[pyfunction]
     #[pyo3(name = "iter", text_signature = "(fh)")]
-    fn iter(py: Python, fh: Bound<PyAny>) -> PyResult<Py<RecordReader>> {
+    pub fn iter(py: Python, fh: Bound<PyAny>) -> PyResult<Py<RecordReader>> {
         let reader = match fh.cast::<PyString>() {
             Ok(s) => RecordReader::from_path(s.to_cow()?.as_ref())?,
             Err(_) => RecordReader::from_handle(fh)?,
@@ -1376,13 +1379,13 @@ pub fn init(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     ///          so that the locus line is no longer than 79 characters.
     ///
     /// .. versionadded:: 0.2.0
-    #[pyfn(m)]
+    #[pyfunction]
     #[pyo3(
         name = "dump",
         signature = (records, fh, escape_locus = false, truncate_locus = false),
         text_signature = "(records, fh, *, escape_locus=False, truncate_locus=False)"
     )]
-    fn dump<'py>(
+    pub fn dump<'py>(
         py: Python<'py>,
         records: Bound<'py, PyAny>,
         fh: Bound<'py, PyAny>,
