@@ -31,7 +31,7 @@ class Record:
         sequence: Union[bytes, bytearray, memoryview],
         *,
         name: Optional[str] = None,
-        length: Optional[str] = None,
+        length: Optional[int] = None,
         molecule_type: Optional[str] = None,
         division: str = "UNK",
         definition: Optional[str] = None,
