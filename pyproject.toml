@@ -8,7 +8,8 @@ dynamic = ["version"]
 description = "A Python interface to gb-io, a fast GenBank parser and serializer written in Rust."
 readme = "README.md"
 requires-python = ">=3.7"
-license = { file = "COPYING" }
+license = "MIT"
+license-files = ["COPYING"]
 authors = [
   { name = "Martin Larralde", email = "martin.larralde@embl.de" },
 ]
@@ -18,7 +19,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Healthcare Industry",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
@@ -54,10 +54,8 @@ module-name = "gb_io.lib"
 
 [tool.cibuildwheel]
 skip = ["*-musllinux_i686"]
-before-build = "pip install maturin"
 test-command = "cd {project} && python -m unittest discover -v"
 build-verbosity = 1
-free-threaded-support = false
 
 [tool.cibuildwheel.windows]
 test-command = "cd /d {project} && python -m unittest discover -v"
