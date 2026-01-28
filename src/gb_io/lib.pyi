@@ -50,7 +50,7 @@ class Record:
 class Source:
     name: str
     organism: Optional[str]
-    def __init__(self, name: str, organism: Optional[str]): ...
+    def __init__(self, name: str, organism: Optional[str] = None): ...
     def __repr__(self) -> str: ...
 
 class Feature:
@@ -58,7 +58,10 @@ class Feature:
     location: Location
     qualifiers: List[Qualifier]
     def __init__(
-        self, kind: str, location: Location, qualifiers: Optional[List[Qualifier]]
+        self,
+        kind: str,
+        location: Location,
+        qualifiers: Optional[List[Qualifier]] = None,
     ): ...
     def __repr__(self) -> str: ...
 
