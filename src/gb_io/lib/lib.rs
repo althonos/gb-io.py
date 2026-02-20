@@ -53,7 +53,7 @@ use self::reader::RecordReader;
 
 /// A single GenBank record.
 #[pyclass(module = "gb_io")]
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Record {
     /// `str` or `None`: The name of the locus.
     #[pyo3(get, set)]
@@ -206,6 +206,12 @@ impl Record {
         }
 
         Ok(PyClassInitializer::from(record))
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(copy))
     }
 
     /// `bool`: Whether the record describes a circular molecule.
@@ -365,7 +371,7 @@ impl Extract for gb_io::seq::Seq {
 
 /// The source of a GenBank record.
 #[pyclass(module = "gb_io")]
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Source {
     /// `str`: The name of the source organism.
     #[pyo3(get, set)]
@@ -381,6 +387,12 @@ impl Source {
     #[pyo3(signature = (name, organism = None))]
     fn __new__(name: String, organism: Option<String>) -> PyClassInitializer<Self> {
         PyClassInitializer::from(Self { name, organism })
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(copy))
     }
 
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -458,6 +470,12 @@ impl Feature {
             location,
             qualifiers,
         })
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(copy))
     }
 
     fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -576,7 +594,7 @@ impl Extract for FeatureKind {
 
 /// A single key-value qualifier for a `Feature`.
 #[pyclass(module = "gb_io")]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Qualifier {
     key: Coa<QualifierKey>,
     /// `str` or `None`: An optional value for the qualifier.
@@ -593,6 +611,12 @@ impl Qualifier {
             key: Coa::Shared(key.unbind()),
             value,
         })
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(copy))
     }
 
     fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -819,7 +843,7 @@ impl Extract for gb_io::seq::Location {
 /// ``Range(1, 206, before=True)``.
 ///
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Range {
     #[pyo3(get, set)]
     /// `int`: The start of the range of positions.
@@ -873,6 +897,12 @@ impl Range {
         })
     }
 
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -887,7 +917,7 @@ impl Range {
 
 /// A location for a `Feature` located between two consecutive positions.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Between {
     /// `int`: The start of the position interval.
     #[pyo3(get, set)]
@@ -915,6 +945,12 @@ impl Between {
         })
     }
 
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -929,7 +965,7 @@ impl Between {
 
 /// A location for a `Feature` on the opposite strand of a given `Location`.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Complement {
     /// `Location`: The location on the complement strand.
     #[pyo3(get, set)]
@@ -951,6 +987,12 @@ impl Complement {
         PyClassInitializer::from(Location).add_subclass(Self {
             location: location.unbind(),
         })
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
     }
 
     fn __repr__<'py>(
@@ -993,7 +1035,7 @@ impl Complement {
 
 /// A location for a `Feature` consisting in joined sequence spans.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Join {
     /// `list` of `Location`: The locations part of the joint location.
     #[pyo3(get, set)]
@@ -1022,6 +1064,12 @@ impl Join {
         Ok(PyClassInitializer::from(Location).add_subclass(Self {
             locations: Py::from(list),
         }))
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
     }
 
     fn __repr__<'py>(
@@ -1065,7 +1113,7 @@ impl Join {
 
 /// A location for a `Feature` over disjoint locations in the given order.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Order {
     /// `list` of `Location`: The locations part of the ordered location.
     #[pyo3(get, set)]
@@ -1096,6 +1144,12 @@ impl Order {
         }))
     }
 
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1105,7 +1159,7 @@ impl Order {
 
 /// A location for a `Feature` corresponding to a bond between locations.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Bond {
     #[pyo3(get, set)]
     locations: Py<PyList>,
@@ -1135,6 +1189,12 @@ impl Bond {
         }))
     }
 
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1144,7 +1204,7 @@ impl Bond {
 
 /// A location for a `Feature` located at one of the given locations.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct OneOf {
     /// `list` of `Location`: The locations at one of which this feature is located.
     #[pyo3(get, set)]
@@ -1175,6 +1235,12 @@ impl OneOf {
         }))
     }
 
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1184,7 +1250,7 @@ impl OneOf {
 
 /// A location for a `Feature` located in an external record.
 #[pyclass(module = "gb_io", extends = Location)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct External {
     /// `str`: The accession of the external record where the feature is located.
     #[pyo3(get, set)]
@@ -1217,6 +1283,12 @@ impl External {
         })
     }
 
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1228,6 +1300,7 @@ impl External {
 
 /// A reference for a record.
 #[pyclass(module = "gb_io")]
+#[derive(Clone)]
 pub struct Reference {
     /// `str`: The title of the publication.
     #[pyo3(get, set)]
@@ -1274,6 +1347,12 @@ impl Reference {
             pubmed,
             remark,
         })
+    }
+
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Reference>> {
+        let py = slf.py();
+        let copy = (*slf).clone();
+        Bound::new(py, copy)
     }
 }
 
