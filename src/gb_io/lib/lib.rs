@@ -31,12 +31,12 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyByteArray;
 use pyo3::types::PyDate;
-// use pyo3::types::PyDateAccess;
 use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::types::PyStringMethods;
 use pyo3::types::PyTuple;
+use pyo3::PyTypeInfo;
 use pyo3_built::pyo3_built;
 
 use self::coa::Coa;
@@ -930,6 +930,12 @@ impl Range {
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
     }
 
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.start, &slf.end, &slf.before, &slf.after).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -978,6 +984,12 @@ impl Between {
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
     }
 
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.start, &slf.end).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1020,6 +1032,12 @@ impl Complement {
         let py = slf.py();
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.location,).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
     }
 
     fn __repr__<'py>(
@@ -1097,6 +1115,12 @@ impl Join {
         let py = slf.py();
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.locations,).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
     }
 
     fn __repr__<'py>(
@@ -1177,6 +1201,12 @@ impl Order {
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
     }
 
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.locations,).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1220,6 +1250,12 @@ impl Bond {
         let py = slf.py();
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.locations,).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
     }
 
     fn __repr__<'py>(
@@ -1268,6 +1304,12 @@ impl OneOf {
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
     }
 
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.locations,).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
+    }
+
     fn __repr__<'py>(
         slf: PyRef<'py, Self>,
     ) -> Result<<Self as PyRepr<'py>>::Output, <Self as PyRepr<'py>>::Error> {
@@ -1314,6 +1356,12 @@ impl External {
         let py = slf.py();
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(Location).add_subclass(copy))
+    }
+
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.accession, &slf.location).into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
     }
 
     fn __repr__<'py>(
@@ -1380,6 +1428,21 @@ impl Reference {
         let py = slf.py();
         let copy = (*slf).clone();
         Bound::new(py, copy)
+    }
+
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (
+            &slf.title,
+            &slf.description,
+            &slf.authors,
+            &slf.consortium,
+            &slf.journal,
+            &slf.pubmed,
+            &slf.remark,
+        )
+            .into_pyobject(py)?;
+        (Self::type_object(py), args).into_pyobject(py)
     }
 }
 
