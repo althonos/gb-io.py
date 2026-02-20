@@ -66,3 +66,4 @@ unittest!(test_biopython);
 unittest!(test_load);
 unittest!(test_dump);
 unittest!(test_location);
+unittest!(test_record);

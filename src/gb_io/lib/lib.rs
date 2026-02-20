@@ -208,8 +208,25 @@ impl Record {
         Ok(PyClassInitializer::from(record))
     }
 
-    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+    fn __copy__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, Self>> {
         let py = slf.py();
+
+        // ensure all Coa fields are in the Python heap (Coa::Shared),
+        // otherwise the clone later will result in a deep copy.
+        (*slf)
+            .source
+            .as_mut()
+            .map(|x| x.to_shared(py))
+            .transpose()?;
+        (*slf).references.to_shared(py)?;
+        (*slf).sequence.to_shared(py)?;
+        (*slf)
+            .contig
+            .as_mut()
+            .map(|x| x.to_shared(py))
+            .transpose()?;
+        (*slf).features.to_shared(py)?;
+
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(copy))
     }
@@ -472,8 +489,15 @@ impl Feature {
         })
     }
 
-    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+    fn __copy__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, Self>> {
         let py = slf.py();
+
+        // ensure all Coa fields are in the Python heap (Coa::Shared),
+        // otherwise the clone later will result in a deep copy.
+        (*slf).kind.to_shared(py)?;
+        (*slf).location.to_shared(py)?;
+        (*slf).qualifiers.to_shared(py)?;
+
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(copy))
     }
@@ -613,8 +637,11 @@ impl Qualifier {
         })
     }
 
-    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+    fn __copy__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, Self>> {
         let py = slf.py();
+
+        (*slf).key.to_shared(py)?;
+
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(copy))
     }
