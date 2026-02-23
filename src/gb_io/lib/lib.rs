@@ -31,6 +31,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyByteArray;
 use pyo3::types::PyDate;
+use pyo3::types::PyDict;
+use pyo3::types::PyDictMethods;
 use pyo3::types::PyIterator;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
@@ -231,6 +233,56 @@ impl Record {
         Bound::new(py, PyClassInitializer::from(copy))
     }
 
+    fn __reduce__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+
+        // extract shared objects
+        let source = slf
+            .source
+            .as_mut()
+            .map(|x| x.to_shared(py))
+            .transpose()?
+            .map(|x| x.as_any().clone());
+        let contig = slf
+            .contig
+            .as_mut()
+            .map(|x| x.to_shared(py))
+            .transpose()?
+            .map(|x| x.as_any().clone());
+        let date = match &(*slf).date {
+            None => py.None(),
+            Some(date) => {
+                PyDate::new(py, date.year() as _, date.month() as _, date.day() as _)?.into()
+            }
+        };
+
+        // record Record.__init__ kwargs to a dictionary
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("name", &slf.name)?;
+        kwargs.set_item("length", &slf.length)?;
+        kwargs.set_item("molecule_type", &slf.molecule_type)?;
+        kwargs.set_item("division", &slf.division)?;
+        kwargs.set_item("definition", &slf.definition)?;
+        kwargs.set_item("accession", &slf.accession)?;
+        kwargs.set_item("version", &slf.version)?;
+        kwargs.set_item("dblink", &slf.dblink)?;
+        kwargs.set_item("keywords", &slf.keywords)?;
+        kwargs.set_item("circular", matches!(slf.topology, Topology::Circular))?;
+        kwargs.set_item("date", date)?;
+        kwargs.set_item("source", source)?;
+        kwargs.set_item("contig", contig)?;
+        kwargs.set_item("references", slf.references.to_shared(py)?)?;
+        kwargs.set_item("features", slf.features.to_shared(py)?)?;
+
+        // create a callable constructor using functools.partial
+        let constructor = py.import(pyo3::intern!(py, "functools"))?.call_method(
+            "partial",
+            (Self::type_object(py), slf.sequence.to_shared(py)?),
+            Some(&kwargs),
+        )?;
+        (constructor, ()).into_pyobject(py)
+    }
+
     /// `bool`: Whether the record describes a circular molecule.
     #[getter]
     fn get_circular(slf: PyRef<'_, Self>) -> bool {
@@ -251,9 +303,9 @@ impl Record {
 
     /// `~datetime.date` or `None`: The date this record was submitted.
     #[getter]
-    fn get_date(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyAny>> {
+    fn get_date(slf: PyRef<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        match &mut slf.deref_mut().date {
+        match &(*slf).date {
             Some(date) => {
                 Ok(PyDate::new(py, date.year() as _, date.month() as _, date.day() as _)?.into())
                 // date.to_shared(py)?.into_py_any(py),
@@ -412,6 +464,12 @@ impl Source {
         Bound::new(py, PyClassInitializer::from(copy))
     }
 
+    fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (&slf.name, &slf.organism);
+        (Self::type_object(py), args).into_pyobject(py)
+    }
+
     fn __repr__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let name = &slf.name;
@@ -500,6 +558,16 @@ impl Feature {
 
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(copy))
+    }
+
+    fn __reduce__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (
+            slf.kind.to_shared(py)?,
+            slf.location.to_shared(py)?,
+            slf.qualifiers.to_shared(py)?,
+        );
+        (Self::type_object(py), args).into_pyobject(py)
     }
 
     fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -644,6 +712,12 @@ impl Qualifier {
 
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(copy))
+    }
+
+    fn __reduce__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let args = (slf.key.to_shared(py)?, &slf.value);
+        (Self::type_object(py), args).into_pyobject(py)
     }
 
     fn __repr__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -932,7 +1006,7 @@ impl Range {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.start, &slf.end, &slf.before, &slf.after).into_pyobject(py)?;
+        let args = (&slf.start, &slf.end, &slf.before, &slf.after);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -986,7 +1060,7 @@ impl Between {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.start, &slf.end).into_pyobject(py)?;
+        let args = (&slf.start, &slf.end);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1036,7 +1110,7 @@ impl Complement {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.location,).into_pyobject(py)?;
+        let args = (&slf.location,);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1119,7 +1193,7 @@ impl Join {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.locations,).into_pyobject(py)?;
+        let args = (&slf.locations,);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1203,7 +1277,7 @@ impl Order {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.locations,).into_pyobject(py)?;
+        let args = (&slf.locations,);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1254,7 +1328,7 @@ impl Bond {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.locations,).into_pyobject(py)?;
+        let args = (&slf.locations,);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1306,7 +1380,7 @@ impl OneOf {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.locations,).into_pyobject(py)?;
+        let args = (&slf.locations,);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1360,7 +1434,7 @@ impl External {
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let args = (&slf.accession, &slf.location).into_pyobject(py)?;
+        let args = (&slf.accession, &slf.location);
         (Self::type_object(py), args).into_pyobject(py)
     }
 
@@ -1440,8 +1514,7 @@ impl Reference {
             &slf.journal,
             &slf.pubmed,
             &slf.remark,
-        )
-            .into_pyobject(py)?;
+        );
         (Self::type_object(py), args).into_pyobject(py)
     }
 }

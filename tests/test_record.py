@@ -24,3 +24,19 @@ class TestRecord(unittest.TestCase):
         # self.assertIs(record2.source, record1.source)
         self.assertIs(record2.references, record1.references)
         self.assertIs(record2.sequence, record1.sequence)
+
+    def test_deepcopy(self):
+
+        path = os.path.join(DATA_FOLDER, "AY048670.1.gb")
+        with open(path, "rb") as f:
+            records = gb_io.load(f)
+
+        record1 = records[0]
+        record2 = copy.deepcopy(record1)
+
+        # shallow copy -- new object, but should keep same references
+        self.assertIsNot(record2, record1)
+        self.assertIsNot(record2.features, record1.features)
+        # self.assertIs(record2.source, record1.source)
+        self.assertIsNot(record2.references, record1.references)
+        self.assertIsNot(record2.sequence, record1.sequence)
