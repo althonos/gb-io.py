@@ -210,7 +210,7 @@ impl Record {
         Ok(PyClassInitializer::from(record))
     }
 
-    fn __copy__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, Self>> {
+    fn __copy__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Self> {
         let py = slf.py();
 
         // ensure all Coa fields are in the Python heap (Coa::Shared),
@@ -229,8 +229,38 @@ impl Record {
             .transpose()?;
         (*slf).features.to_shared(py)?;
 
-        let copy = (*slf).clone();
-        Bound::new(py, PyClassInitializer::from(copy))
+        Ok((*slf).clone())
+    }
+
+    fn __deepcopy__<'py>(slf: PyRef<'py, Self>, _memo: &Bound<'py, PyDict>) -> PyResult<Self> {
+        let py = slf.py();
+        Ok(Self {
+            name: slf.name.clone(),
+            length: slf.length.clone(),
+            molecule_type: slf.molecule_type.clone(),
+            division: slf.division.clone(),
+            definition: slf.definition.clone(),
+            accession: slf.accession.clone(),
+            version: slf.version.clone(),
+            dblink: slf.dblink.clone(),
+            keywords: slf.keywords.clone(),
+            topology: slf.topology.clone(),
+            date: slf.date.clone(),
+            source: slf
+                .source
+                .as_ref()
+                .map(|x| x.to_owned_class(py).map(Coa::Owned))
+                .transpose()?,
+            references: Coa::Owned(slf.references.to_owned_native(py)?),
+            comments: slf.comments.clone(),
+            sequence: Coa::Owned(slf.sequence.to_owned_native(py)?),
+            contig: slf
+                .contig
+                .as_ref()
+                .map(|x| x.to_owned_class(py).map(Coa::Owned))
+                .transpose()?,
+            features: Coa::Owned(slf.features.to_owned_native(py)?),
+        })
     }
 
     fn __reduce__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
@@ -395,7 +425,7 @@ impl Record {
     ///     Use `copy.deepcopy` if a deep copy is needed (e.g. to
     ///     create a distinct list of features).
     ///
-    fn copy(slf: PyRefMut<'_, Self>) -> PyResult<Bound<'_, Self>> {
+    fn copy(slf: PyRefMut<'_, Self>) -> PyResult<Self> {
         Self::__copy__(slf)
     }
 }
@@ -599,6 +629,15 @@ impl Feature {
         Bound::new(py, PyClassInitializer::from(copy))
     }
 
+    fn __deepcopy__<'py>(slf: PyRef<'py, Self>, _memo: &Bound<'py, PyDict>) -> PyResult<Self> {
+        let py = slf.py();
+        Ok(Feature {
+            kind: Coa::Owned(slf.kind.to_owned_native(py)?),
+            location: Coa::Owned(slf.location.to_owned_class(py)?),
+            qualifiers: Coa::Owned(slf.qualifiers.to_owned_native(py)?),
+        })
+    }
+
     fn __reduce__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
         let args = (
@@ -756,11 +795,17 @@ impl Qualifier {
 
     fn __copy__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, Self>> {
         let py = slf.py();
-
         (*slf).key.to_shared(py)?;
-
         let copy = (*slf).clone();
         Bound::new(py, PyClassInitializer::from(copy))
+    }
+
+    fn __deepcopy__<'py>(slf: PyRef<'py, Self>, _memo: &Bound<'py, PyDict>) -> PyResult<Self> {
+        let py = slf.py();
+        Ok(Self {
+            key: Coa::Owned(slf.key.to_owned_native(py)?),
+            value: slf.value.clone(),
+        })
     }
 
     fn __reduce__<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {

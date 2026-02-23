@@ -21,7 +21,7 @@ class TestRecord(unittest.TestCase):
         # shallow copy -- new object, but should keep same references
         self.assertIsNot(record2, record1)
         self.assertIs(record2.features, record1.features)
-        # self.assertIs(record2.source, record1.source)
+        self.assertIs(record2.source, record1.source)
         self.assertIs(record2.references, record1.references)
         self.assertIs(record2.sequence, record1.sequence)
 
@@ -37,6 +37,7 @@ class TestRecord(unittest.TestCase):
         # shallow copy -- new object, but should keep same references
         self.assertIsNot(record2, record1)
         self.assertIsNot(record2.features, record1.features)
-        # self.assertIs(record2.source, record1.source)
+        self.assertIsNot(record2.features[0], record1.features[0])
+        self.assertIsNot(record2.source, record1.source)
         self.assertIsNot(record2.references, record1.references)
         self.assertIsNot(record2.sequence, record1.sequence)
