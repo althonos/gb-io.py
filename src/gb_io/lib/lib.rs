@@ -387,6 +387,17 @@ impl Record {
     fn set_references(mut slf: PyRefMut<'_, Self>, references: Py<PyList>) {
         slf.references = Coa::Shared(references);
     }
+
+    /// Create a copy of the record.
+    ///
+    /// Returns:
+    ///     `~gb_io.Record`: A shallow copy of the record object.
+    ///     Use `copy.deepcopy` if a deep copy is needed (e.g. to
+    ///     create a distinct list of features).
+    ///
+    fn copy(slf: PyRefMut<'_, Self>) -> PyResult<Bound<'_, Self>> {
+        Self::__copy__(slf)
+    }
 }
 
 impl Convert for gb_io::seq::Seq {
@@ -497,6 +508,15 @@ impl Source {
         } else {
             PyString::new(py, "Source({!r})").call_method1("format", (name,))
         }
+    }
+
+    /// Create a copy of the source.
+    ///
+    /// Returns:
+    ///     `~gb_io.Source`: A copy of the source object.
+    ///
+    fn copy(slf: PyRef<'_, Self>) -> PyResult<Bound<'_, Self>> {
+        Self::__copy__(slf)
     }
 }
 
@@ -638,6 +658,16 @@ impl Feature {
     fn set_qualifiers<'py>(mut slf: PyRefMut<'py, Self>, qualifiers: Py<PyList>) {
         slf.qualifiers = Coa::Shared(qualifiers.clone_ref(slf.py()));
     }
+
+    /// Create a copy of the feature.
+    ///
+    /// Returns:
+    ///     `~gb_io.Feature`: A shallow copy of the feature object.
+    ///     Use `deepcopy.copy` to obtain a deep copy instead.
+    ///
+    fn copy(slf: PyRefMut<'_, Self>) -> PyResult<Bound<'_, Self>> {
+        Self::__copy__(slf)
+    }
 }
 
 impl Convert for gb_io::seq::Feature {
@@ -759,6 +789,15 @@ impl Qualifier {
     #[setter]
     fn set_key<'py>(mut slf: PyRefMut<'py, Self>, key: Bound<'py, PyString>) {
         slf.key = Coa::Shared(key.unbind());
+    }
+
+    /// Create a copy of the qualifier.
+    ///
+    /// Returns:
+    ///     `~gb_io.Qualifier`: A copy of the qualifier object.
+    ///
+    fn copy(slf: PyRefMut<'_, Self>) -> PyResult<Bound<'_, Self>> {
+        Self::__copy__(slf)
     }
 }
 
@@ -1517,7 +1556,7 @@ impl Reference {
         })
     }
 
-    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Reference>> {
+    fn __copy__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
         let py = slf.py();
         let copy = (*slf).clone();
         Bound::new(py, copy)
@@ -1535,6 +1574,15 @@ impl Reference {
             &slf.remark,
         );
         (Self::type_object(py), args).into_pyobject(py)
+    }
+
+    /// Create a copy of the reference.
+    ///
+    /// Returns:
+    ///     `~gb_io.Reference`: A copy of the reference object.
+    ///
+    fn copy<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        Self::__copy__(slf)
     }
 }
 
