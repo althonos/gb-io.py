@@ -333,6 +333,25 @@ impl Record {
         Ok(())
     }
 
+    /// `gb_io.Source` or `None`: The source of the record, if any.
+    #[getter]
+    fn get_source(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        match slf.source.as_mut() {
+            None => Ok(py.None()),
+            Some(s) => Ok(s.to_shared(py)?.into_any()),
+        }
+    }
+
+    #[setter]
+    fn set_source(mut slf: PyRefMut<'_, Self>, source: Option<Py<Source>>) {
+        if let Some(src) = source {
+            slf.source = Some(Coa::Shared(src));
+        } else {
+            slf.source = None;
+        }
+    }
+
     /// `bytes`: The sequence of the record in lowercase, as raw ASCII.
     #[getter]
     fn get_sequence(mut slf: PyRefMut<'_, Self>) -> PyResult<Py<PyByteArray>> {

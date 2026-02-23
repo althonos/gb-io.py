@@ -26,6 +26,7 @@ class Record:
     sequence: bytearray
     features: List[Feature]
     references: List[Reference]
+    source: Optional[Source]
     def __init__(
         self,
         sequence: Union[bytes, bytearray, memoryview],
