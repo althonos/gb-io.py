@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 [Unreleased]: https://github.com/althonos/gb-io.py/compare/v0.3.8...HEAD
 
+
+## [v0.4.0] - 2026-02-23
+[v0.4.0]: https://github.com/althonos/gb-io.py/compare/v0.3.8...v0.4.0
+
+### Added
+- `__copy__`, `__deepcopy__` and `__reduce__` implementation for most objects ([#66](https://github.com/althonos/gb-io.py/issues/66)).
+- `Record.source` property to get the source of a GenBank record.
+
+### Changed
+- Update project dependencies to latest available versions.
+
+### Fixed
+- Type annotations for `length` parameter in `Record.__init__` ([#65](https://github.com/althonos/gb-io.py/issues/65)).
+- Type annotations for some optional method parameters not having a default `None` value.
+- Project medata in `pyproject.toml`.
+
+
 ## [v0.3.8] - 2025-10-25
 [v0.3.8]: https://github.com/althonos/gb-io.py/compare/v0.3.7...v0.3.8
 
